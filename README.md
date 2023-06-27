@@ -5,19 +5,27 @@ create a acts workflow server based on  acts lib
 a command client for acts-server
 
 the supported commands as follows:
+
+* query model data
+```
 model <mid>
-    query the model data
+```
 
+* query task data
+```
 task <pid> <tid>
-    query the task data
+```
 
+* deploy a workflow
+```
 deploy <path>
-    deploy a workflow
-
+    
     path: yml model local file path
+```
 
+* subscribe server message
+```
 sub <client_id> [kind] [event] [nkind] [topic]
-    subscribe server message
     kind, event, nkind and topic are all support glob string
 
     client_id:  client id
@@ -37,31 +45,34 @@ sub <client_id> [kind] [event] [nkind] [topic]
     sub 1 * {init,error,complete} workflow
     5. sub all messages that the topic starts with abc
     sub 1 * * * abc*
+```
+* remove model
+```
+rm <key>
+    key: model id
+```
 
-
-rm <proc|model> <key>
-    proc <pid>: use to remove proc by pid
-    model <mid>: use to remove model by mid
-
+* start a workflow
+```
 start <mid>
-    start a workflow
-
     mid: workflow model id
+```
 
+* list a proc's tasks
+```
 tasks <pid>
-    query the proc tasks
-
     pid: the proc id
+```
 
+* update the proc variables
+```
 update <pid> <aid>
-    update the variables
-
     pid: proc id
     aid: act id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
-
+```
 env <op> [key] [value] [value-type]
     op: command with set, get, ls
             set: set key and value.
@@ -72,67 +83,74 @@ env <op> [key] [value] [value-type]
     value: env value
     value-type: value type with string, int, float and json, the default type is string
 
+* submit data
+```
 submit <mid>
-    submit data
-
     mid: model id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
+```
 
+* query the deployed models
+```
 models [count]
-    query the current deployed models
-
     count: expect to load the max model count
+```
 
+*  query a proc's acts
+```
 acts <pid> <tid>
-    query the proc acts
-
     pid: proc id
     tid: task id
+```
 
+* query a proc's information
+```
 proc <pid>
-    query the proc data
+```
 
+*  back to the history task
+```
 back <pid> <aid>
-    back to the history task
-
     pid: proc id
     aid: act id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
-
+```
+* abort the workflow
+```
 abort <pid> <aid>
-    abort the workflow
-
     pid: proc id
     aid: act id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
+```
 
+* query the current running procs
+```
 procs [count]
-    query the current running procs
-
     count: expect to load the max proc count
-
+```
+* complete the act
+```
 abort <pid> <aid>
-    complete the act
-
     pid: proc id
     aid: act id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
+```
 
+* cancel the act which is completed before
+```
 cancel <pid> <aid>
-    cancel the act that is completed before
-
     pid: proc id
     aid: act id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
-
+```
 
