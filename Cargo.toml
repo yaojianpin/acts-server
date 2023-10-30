@@ -1,2 +1,3 @@
 [workspace]
-members = ["acts-grpc", "acts-server", "acts-cli"]
+members = ["acts-server", "acts-cli"]
+resolver = "2"

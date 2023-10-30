@@ -1,10 +1,10 @@
-use acts_grpc::{
-    model::{ActInfo, ModelInfo, ProcInfo, TaskInfo},
-    ActionState, Vars,
+use acts_channel::{
+    model::{ModelInfo, ProcInfo, TaskInfo},
+    ActionResult, Vars,
 };
 use chrono::prelude::*;
 
-pub fn process_result(name: &str, state: ActionState) -> String {
+pub fn process_result(name: &str, state: ActionResult) -> String {
     let mut result = String::new();
     match name {
         "models" => {
@@ -49,13 +49,13 @@ pub fn process_result(name: &str, state: ActionState) -> String {
                 })
                 .unwrap();
             result.push_str(&format!(
-                "{:48}{:20}{:36}{:16}{:20}\n",
+                "{:36}{:40}{:36}{:16}{:20}\n",
                 "pid", "name", "model id", "state", "start time"
             ));
             for p in procs {
                 result.push_str(&format!(
-                    "{:48}{:20}{:36}{:16}{:20}\n",
-                    p.pid,
+                    "{:36}{:40}{:36}{:16}{:20}\n",
+                    p.id,
                     p.name,
                     p.mid,
                     p.state,
@@ -77,16 +77,17 @@ pub fn process_result(name: &str, state: ActionState) -> String {
                 })
                 .unwrap();
             result.push_str(&format!(
-                "{:12}{:16}{:16}{:16}{:20}{:20}\n",
-                "kind", "tid", "nid", "state", "start time", "end time",
+                "{:12}{:16}{:16}{:16}{:16}{:20}{:20}\n",
+                "type", "tid", "name", "nid", "state", "start time", "end time",
             ));
             for p in tasks {
                 result.push_str(&format!(
-                    "{:12}{:16}{:16}{:16}{:20}{:20}\n",
+                    "{:12}{:16}{:16}{:16}{:16}{:20}{:20}\n",
                     p.kind,
-                    p.tid,
-                    p.nid,
-                    p.state,
+                    p.id,
+                    p.name,
+                    p.node_id,
+                    p.action_state,
                     local_time(p.start_time),
                     local_time(p.end_time)
                 ));
@@ -97,7 +98,7 @@ pub fn process_result(name: &str, state: ActionState) -> String {
             let acts = vars
                 .get(name)
                 .map(|v| {
-                    let mut arr: Vec<ActInfo> = Vec::new();
+                    let mut arr: Vec<TaskInfo> = Vec::new();
                     for info in v.as_array().unwrap() {
                         arr.push(info.into())
                     }
@@ -106,16 +107,17 @@ pub fn process_result(name: &str, state: ActionState) -> String {
                 })
                 .unwrap();
             result.push_str(&format!(
-                "{:16}{:16}{:16}{:16}{:20}{:20}\n",
-                "kind", "aid", "tid", "state", "start time", "end time",
+                "{:12}{:16}{:16}{:16}{:16}{:20}{:20}\n",
+                "type", "tid", "name", "nid", "state", "start time", "end time",
             ));
             for act in acts {
                 result.push_str(&format!(
-                    "{:16}{:16}{:16}{:16}{:20}{:20}\n",
+                    "{:12}{:16}{:16}{:16}{:16}{:20}{:20}\n",
                     act.kind,
-                    act.aid,
-                    act.tid,
-                    act.state,
+                    act.id,
+                    act.name,
+                    act.node_id,
+                    act.action_state,
                     local_time(act.start_time),
                     local_time(act.end_time)
                 ));
@@ -126,23 +128,45 @@ pub fn process_result(name: &str, state: ActionState) -> String {
             let pid = vars.get("pid").unwrap();
             result.push_str(&format!("pid={pid}"));
         }
-        // "abort" | "back" | "cancel" | "complete" => {}
         "model" => {
             let vars = Vars::from_prost(&state.data.unwrap());
             let model = vars
                 .get(name)
                 .map(|v| {
                     let model: ModelInfo = v.into();
-
                     model
                 })
                 .unwrap();
             result.push_str(&model.model);
             result.push_str("\n");
         }
-        "proc" | "task" => {
-            let vars: Vars = Vars::from_prost(&state.data.unwrap());
-            result.push_str(&format!("{}", vars));
+        "proc" => {
+            let vars = Vars::from_prost(&state.data.unwrap()).into_inner();
+            if let Some(proc) = vars.get("proc") {
+                if let Some(map) = proc.as_object() {
+                    for (key, v) in map {
+                        if key == "tasks" {
+                            continue;
+                        }
+                        result.push_str(&format!("{}:{}\n", key, v));
+                    }
+                    result.push_str("tasks:\n");
+                    if let Some(v) = map.get("tasks") {
+                        let text = v.as_str().unwrap();
+                        result.push_str(&format!("{}\n", text));
+                    }
+                }
+            }
+        }
+        "task" => {
+            let vars = Vars::from_prost(&state.data.unwrap()).into_inner();
+            if let Some(proc) = vars.get("task") {
+                if let Some(map) = proc.as_object() {
+                    for (key, v) in map {
+                        result.push_str(&format!("{}:{}\n", key, v));
+                    }
+                }
+            }
         }
         _ => {}
     };

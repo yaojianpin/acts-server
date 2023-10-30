@@ -1,5 +1,5 @@
 # acts-server
-create a acts workflow server based on  acts lib
+create a acts workflow server based on  [`acts`](https://github.com/yaojianpin/acts) lib
 
 # acts-cli
 a command client for acts-server
@@ -8,7 +8,7 @@ the supported commands as follows:
 
 * query model data
 ```
-model <mid>
+model <mid> [tree]
 ```
 
 * query task data
@@ -25,26 +25,27 @@ deploy <path>
 
 * subscribe server message
 ```
-sub <client_id> [kind] [event] [nkind] [topic]
-    kind, event, nkind and topic are all support glob string
+sub <client_id> [type] [state] [tag] [key]
+    subscribe server message
+    type, state and tag are all support glob string
 
     client_id:  client id
-    kind: message kind in task, act*, notice.
-    event: message event in init, complete, error, cancel, abort and back.
-    nkind: message node kind in workflow, job, branch and step
-    topic: message topic which is defined in workflow model topic attribute.
+    type: message types are in workflow, job, step, branch and act.
+    state: message state in created, completed, error, cancelled, aborted, skipped and backed.
+    tag: message tag which is defined in workflow model tag attribute.
+    key: message key
 
     for examples:
     1. sub all messages:
     sub  1
     2. sub all act messages:
-    sub 1 act*
-    3. sub init and complete messages
-    sub 1 * {init,complete}
-    4. sub workflow messages with init, complete and error.
-    sub 1 * {init,error,complete} workflow
-    5. sub all messages that the topic starts with abc
-    sub 1 * * * abc*
+    sub 1 act
+    3. sub created and complete messages
+    sub 1 * {created,completed}
+    4. sub all messages that the tag starts with abc
+    sub 1 * * abc*
+    5. sub all messages that the key starts with 123
+    sub 1 * * * 123*
 ```
 * remove model
 ```
@@ -85,8 +86,9 @@ env <op> [key] [value] [value-type]
 
 * submit data
 ```
-submit <mid>
-    mid: model id
+abort <pid> <aid>
+    pid: proc id
+    aid: act id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
@@ -98,16 +100,11 @@ models [count]
     count: expect to load the max model count
 ```
 
-*  query a proc's acts
-```
-acts <pid> <tid>
-    pid: proc id
-    tid: task id
-```
-
 * query a proc's information
 ```
-proc <pid>
+proc <pid> [tree]
+    pid: proc id
+    tree: show the proc tasks in tree
 ```
 
 *  back to the history task

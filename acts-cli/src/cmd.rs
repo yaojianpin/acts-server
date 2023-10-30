@@ -1,15 +1,11 @@
 use crate::{help, util};
-use acts_grpc::{
-    self, acts_service_client::ActsServiceClient, model::Message, ActionOptions, MessageOptions,
-    Vars,
-};
-use futures::StreamExt;
+use acts_channel::{self, ActsChannel, ActsOptions, Vars};
 use serde_json::json;
-use tonic::{transport::Channel, Request, Status};
+use tonic::Status;
 
 pub struct Command<'a> {
     env: Vars,
-    client: &'a mut ActsServiceClient<Channel>,
+    client: &'a mut ActsChannel,
 }
 
 enum EnvValueType {
@@ -32,7 +28,7 @@ impl EnvValueType {
 }
 
 impl<'a> Command<'a> {
-    pub fn new(client: &'a mut ActsServiceClient<Channel>) -> Self {
+    pub fn new(client: &'a mut ActsChannel) -> Self {
         Self {
             client,
             env: Vars::new(),
@@ -62,7 +58,7 @@ impl<'a> Command<'a> {
                     }
                     "get" => {
                         let key = args.get(1).ok_or(Status::invalid_argument(help_text))?;
-                        ret = match self.env.get(key.clone()) {
+                        ret = match self.env.get(&key.to_string()) {
                             Some(v) => v.to_string(),
                             None => "(nil)".to_string(),
                         };
@@ -74,7 +70,7 @@ impl<'a> Command<'a> {
                         let mut end_index = args.len() - 1;
                         if vec!["json", "int", "float", "string"].contains(last) {
                             end_index = args.len() - 2;
-                            vtype = EnvValueType::parse(last.clone())
+                            vtype = EnvValueType::parse(last)
                                 .ok_or(Status::invalid_argument(help_text))?;
                         }
                         let mut value = String::new();
@@ -93,8 +89,7 @@ impl<'a> Command<'a> {
                             }
                             start_index += 1;
                         }
-                        self.env
-                            .insert(key.to_string(), &self.to_json(&value, &vtype)?);
+                        self.env.insert(key, &self.to_json(&value, &vtype)?);
 
                         ret = format!("{key}:{value}");
                     }
@@ -114,22 +109,13 @@ impl<'a> Command<'a> {
                 };
             }
             "rm" => {
-                let mut options = Vars::new();
-                options.insert_str(
-                    "mid".to_string(),
-                    args.get(0)
-                        .cloned()
-                        .ok_or(Status::invalid_argument(help_text))?,
-                );
+                let mid = args
+                    .get(0)
+                    .cloned()
+                    .ok_or(Status::invalid_argument(help_text))?;
 
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
-                ret = util::process_result(name, resp.into_inner());
+                let resp = self.client.rm(mid).await?;
+                ret = util::process_result(name, resp);
             }
 
             "sub" => {
@@ -139,26 +125,24 @@ impl<'a> Command<'a> {
                     .ok_or(Status::invalid_argument(help_text))?;
 
                 // * means to sub all messages
-                let kind = args.get(1).cloned().unwrap_or("*");
-                let event = args.get(2).cloned().unwrap_or("*");
-                let nkind = args.get(3).cloned().unwrap_or("*");
-                let topic = args.get(4).cloned().unwrap_or("*");
-                let request = tonic::Request::new(MessageOptions {
-                    client_id: client_id.to_string(),
-                    kind: kind.to_string(),
-                    event: event.to_string(),
-                    nkind: nkind.to_string(),
-                    topic: topic.to_string(),
-                });
-                let mut stream = self.client.on_message(request).await.unwrap().into_inner();
-                tokio::spawn(async move {
-                    while let Some(item) = stream.next().await {
-                        if !item.is_err() {
-                            let m: Message = item.unwrap().into();
+                let r#type = args.get(1).cloned().unwrap_or("*");
+                let state = args.get(2).cloned().unwrap_or("*");
+                let tag = args.get(3).cloned().unwrap_or("*");
+                let key = args.get(4).cloned().unwrap_or("*");
+                self.client
+                    .sub(
+                        client_id,
+                        |m| {
                             println!("[message]: {}", serde_json::to_string(&m).unwrap());
-                        }
-                    }
-                });
+                        },
+                        &ActsOptions {
+                            r#type: Some(r#type.to_string()),
+                            state: Some(state.to_string()),
+                            tag: Some(tag.to_string()),
+                            key: Some(key.to_string()),
+                        },
+                    )
+                    .await;
             }
             "deploy" => {
                 let file_path = args.first().ok_or(Status::invalid_argument(help_text))?;
@@ -168,64 +152,28 @@ impl<'a> Command<'a> {
                 let mut options = Vars::new();
                 options.insert_str("model".to_string(), text);
 
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
-                ret = util::process_result(name, resp.into_inner());
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
             }
-            "start" | "submit" => {
+            "start" => {
                 let mid = args.get(0).ok_or(Status::invalid_argument(help_text))?;
                 let mut options = Vars::new();
-                options.insert_str("mid".to_string(), mid.clone());
-
+                options.insert_str("mid".to_string(), mid.to_string());
                 options.extend(&self.env);
 
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
-
-                ret = util::process_result(name, resp.into_inner());
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
             }
-            "ack" => {
+            "submit" | "back" | "cancel" | "abort" | "complete" | "skip" | "error" => {
                 let pid = args.get(0).ok_or(Status::invalid_argument(help_text))?;
-                let aid = args.get(1).ok_or(Status::invalid_argument(help_text))?;
+                let tid = args.get(1).ok_or(Status::invalid_argument(help_text))?;
                 let mut options = Vars::new();
-                options.insert_str("pid".to_string(), pid.clone());
-                options.insert_str("aid".to_string(), aid.clone());
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
-                ret = util::process_result(name, resp.into_inner());
-            }
-            "back" | "cancel" | "abort" | "complete" | "update" => {
-                let pid = args.get(0).ok_or(Status::invalid_argument(help_text))?;
-                let aid = args.get(1).ok_or(Status::invalid_argument(help_text))?;
-                let mut options = Vars::new();
-                options.insert_str("pid".to_string(), pid.clone());
-                options.insert_str("aid".to_string(), aid.clone());
-
+                options.insert_str("pid".to_string(), pid.to_string());
+                options.insert_str("tid".to_string(), tid.to_string());
                 options.extend(&self.env);
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
 
-                ret = util::process_result(name, resp.into_inner());
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
             }
 
             "models" | "procs" => {
@@ -238,17 +186,9 @@ impl<'a> Command<'a> {
                             .map_err(|err| Status::invalid_argument(err.to_string()))?,
                     );
                 };
-
                 options.extend(&self.env);
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
-
-                ret = util::process_result(name, resp.into_inner());
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
             }
 
             "model" => {
@@ -260,19 +200,16 @@ impl<'a> Command<'a> {
                         .ok_or(Status::invalid_argument(help_text))?,
                 );
 
-                options.extend(&self.env);
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
+                if let Some(fmt) = args.get(1) {
+                    options.insert_str("fmt".to_string(), fmt.to_string());
+                };
 
-                ret = util::process_result(name, resp.into_inner());
+                options.extend(&self.env);
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
             }
 
-            "proc" | "tasks" => {
+            "proc" => {
                 let mut options = Vars::new();
                 options.insert_str(
                     "pid".to_string(),
@@ -280,19 +217,14 @@ impl<'a> Command<'a> {
                         .cloned()
                         .ok_or(Status::invalid_argument(help_text))?,
                 );
-
+                if let Some(fmt) = args.get(1) {
+                    options.insert_str("fmt".to_string(), fmt.to_string());
+                };
                 options.extend(&self.env);
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
-
-                ret = util::process_result(name, resp.into_inner());
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
             }
-            "acts" => {
+            "tasks" => {
                 let mut options = Vars::new();
                 options.insert_str(
                     "pid".to_string(),
@@ -300,21 +232,17 @@ impl<'a> Command<'a> {
                         .cloned()
                         .ok_or(Status::invalid_argument(help_text))?,
                 );
-
-                if let Some(tid) = args.get(1) {
-                    options.insert_str("tid".to_string(), tid.clone());
-                }
-
+                if let Some(count) = args.get(1) {
+                    options.insert_number(
+                        "count".to_string(),
+                        count
+                            .parse::<f64>()
+                            .map_err(|err| Status::invalid_argument(err.to_string()))?,
+                    );
+                };
                 options.extend(&self.env);
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
-
-                ret = util::process_result(name, resp.into_inner());
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
             }
             "task" => {
                 let mut options = Vars::new();
@@ -331,15 +259,8 @@ impl<'a> Command<'a> {
                         .ok_or(Status::invalid_argument(help_text))?,
                 );
                 options.extend(&self.env);
-                let resp = self
-                    .client
-                    .action(Request::new(ActionOptions {
-                        name: name.to_string(),
-                        options: Some(options.prost_vars()),
-                    }))
-                    .await?;
-
-                ret = util::process_result(name, resp.into_inner());
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
             }
             "help" | _ => {
                 ret = help::all();

@@ -8,8 +8,6 @@ use clap::Parser;
 use cli::Cli;
 use cmd::Command;
 use std::io::{self, Write};
-use std::str::FromStr;
-use tonic::transport::Endpoint;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,9 +25,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let uri = format!("http://{hostname}:{port}");
-    let endpoint = Endpoint::from_str(&uri)?;
     let tip = format!("{}:{}> ", hostname, port);
-    let mut client = client::connect(endpoint).await?;
+    let mut client = client::connect(&uri).await?;
     let mut cmd = Command::new(&mut client);
 
     let stdin = io::stdin();

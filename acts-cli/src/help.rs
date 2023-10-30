@@ -17,28 +17,27 @@ const RM: &str = r#"rm <proc|model> <key>
     model <mid>: use to remove model by mid
 "#;
 
-const SUB: &str = r#"sub <client_id> [kind] [event] [nkind] [topic]
+const SUB: &str = r#"sub <client_id> [type] [state] [tag] [key]
     subscribe server message
-    kind, event, nkind and topic are all support glob string
+    type, state and tag are all support glob string
 
     client_id:  client id
-    kind: message kind in task, act*, notice.
-    event: message event in init, complete, error, cancel, abort and back.
-    nkind: message node kind in workflow, job, branch and step
-    topic: message topic which is defined in workflow model topic attribute.
+    type: message types are in workflow, job, step, branch and act.
+    state: message state in created, completed, error, cancelled, aborted, skipped and backed.
+    tag: message tag which is defined in workflow model tag attribute.
+    key: message key
 
     for examples:
     1. sub all messages:
     sub  1
     2. sub all act messages:
-    sub 1 act*
-    3. sub init and complete messages
-    sub 1 * {init,complete}
-    4. sub workflow messages with init, complete and error.
-    sub 1 * {init,error,complete} workflow
-    5. sub all messages that the topic starts with abc
-    sub 1 * * * abc*
-
+    sub 1 act
+    3. sub created and complete messages
+    sub 1 * {created,completed}
+    4. sub all messages that the tag starts with abc
+    sub 1 * * abc*
+    5. sub all messages that the key starts with 123
+    sub 1 * * * 123*
 "#;
 
 const MODELS: &str = r#"models [count]
@@ -47,8 +46,10 @@ const MODELS: &str = r#"models [count]
     count: expect to load the max model count
 "#;
 
-const MODEL: &str = r#"model <mid>
+const MODEL: &str = r#"model <mid> [fmt]
     query the model data
+    mid: model id
+    fmt: display format with text|json|tree
 "#;
 
 const PROCS: &str = r#"procs [count]
@@ -71,13 +72,6 @@ const TASK: &str = r#"task <pid> <tid>
     query the task data
 "#;
 
-const ACTS: &str = r#"acts <pid> <tid>
-    query the proc acts
-
-    pid: proc id
-    tid: task id
-"#;
-
 const DEPLOY: &str = r#"deploy <path>
     deploy a workflow
 
@@ -90,60 +84,71 @@ const START: &str = r#"start <mid>
     mid: workflow model id
 "#;
 
-const SUBMIT: &str = r#"submit <mid>
-    submit data
+const SUBMIT: &str = r#"submit <pid> <tid>
+    submit an action
 
-    mid: model id
+    pid: proc id
+    tid: task id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
 "#;
 
-const BACK: &str = r#"back <pid> <aid>
+const BACK: &str = r#"back <pid> <tid>
     back to the history task
 
     pid: proc id
-    aid: act id
+    tid: task id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
 "#;
 
-const CANCEL: &str = r#"cancel <pid> <aid>
+const CANCEL: &str = r#"cancel <pid> <tid>
     cancel the act that is completed before
 
     pid: proc id
-    aid: act id
+    tid: task id
     
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
 "#;
 
-const ABORT: &str = r#"abort <pid> <aid>
+const ABORT: &str = r#"abort <pid> <tid>
     abort the workflow
 
     pid: proc id
-    aid: act id
+    tid: task id
     
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
 "#;
 
-const COMPLETE: &str = r#"abort <pid> <aid>
+const COMPLETE: &str = r#"abort <pid> <tid>
     complete the act
 
     pid: proc id
-    aid: act id
+    tid: task id
     
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
 "#;
 
-const UPDATE: &str = r#"update <pid> <aid>
-    update the variables
+const SKIP: &str = r#"skip <pid> <tid>
+    skip the action
 
     pid: proc id
-    aid: act id
+    tid: task id
+    
+    nodes: this command can execute with extra options
+    the options is from the env which is created through env command
+"#;
+
+const ERROR: &str = r#"error <pid> <tid>
+    set an action as error
+
+    pid: proc id
+    tid: task id
     
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
@@ -160,7 +165,6 @@ pub const MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
         ("proc", PROC),
         ("tasks", TASKS),
         ("task", TASK),
-        ("acts", ACTS),
         ("deploy", DEPLOY),
         ("start", START),
         ("submit", SUBMIT),
@@ -168,7 +172,8 @@ pub const MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
         ("cancel", CANCEL),
         ("abort", ABORT),
         ("complete", COMPLETE),
-        ("update", UPDATE),
+        ("skip", SKIP),
+        ("error", ERROR),
     ])
 });
 

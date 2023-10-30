@@ -1,9 +1,6 @@
-use acts_grpc::acts_service_client::*;
-use tonic::transport::{Channel, Endpoint};
+use acts_channel::ActsChannel;
 
-pub async fn connect(
-    addr: Endpoint,
-) -> Result<ActsServiceClient<Channel>, Box<dyn std::error::Error>> {
-    let client = ActsServiceClient::connect(addr).await?;
+pub async fn connect(url: &str) -> Result<ActsChannel, Box<dyn std::error::Error>> {
+    let client = ActsChannel::new(url).await?;
     Ok(client)
 }
