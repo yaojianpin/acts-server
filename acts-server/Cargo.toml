@@ -1,12 +1,10 @@
 [package]
 edition = "2021"
 name = "acts-server"
-version = "0.2.0"
+version = "0.2.1"
 
 [dependencies]
-acts = { version = "0.6.0", path = "D:/private/github/workflow/acts", features = [
-    "local_store",
-] }
+acts = { version = "0.6.0", features = ["local_store"] }
 acts-channel = { version = "*", git = "https://github.com/yaojianpin/acts-channel.git" }
 futures = "0.3.27"
 globset = "0.4.10"
