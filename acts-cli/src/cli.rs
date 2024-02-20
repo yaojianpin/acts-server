@@ -10,8 +10,6 @@ pub struct Cli {
 
     #[arg(short, long)]
     pub port: Option<u16>,
-    // #[arg(short = 'a', long)]
-    // pub password: Option<String>,
 }
 
 impl Cli {}

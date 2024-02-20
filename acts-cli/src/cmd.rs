@@ -164,7 +164,7 @@ impl<'a> Command<'a> {
                 let resp = self.client.do_action(name, &options).await?;
                 ret = util::process_result(name, resp);
             }
-            "submit" | "back" | "cancel" | "abort" | "complete" | "skip" | "error" => {
+            "submit" | "back" | "cancel" | "abort" | "complete" | "skip" | "error" | "push" | "remove" => {
                 let pid = args.get(0).ok_or(Status::invalid_argument(help_text))?;
                 let tid = args.get(1).ok_or(Status::invalid_argument(help_text))?;
                 let mut options = Vars::new();

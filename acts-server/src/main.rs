@@ -33,12 +33,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn print_logo() {
-    let logo = r#"
-     _        _ 
-    / \   ___| |_ ___ 
-   / _ \ / __| __/ __|          acts by Yao
-  / ___ \ (__| |_\__ \          
- /_/   \_\___|\__|___/
-                     "#;
-    println!("{}", logo);
+    let banner = r#"
+    _______      _____        
+    ___    |_______  /________
+    __  /| |  ___/  __/_  ___/
+    _  ___ / /__ / /_ _(__  ) 
+    /_/  |_\___/ \__/ /____/  
+"#;
+    println!("{}", banner);
+    println!("created by Yao");
 }

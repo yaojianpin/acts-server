@@ -58,8 +58,9 @@ const PROCS: &str = r#"procs [count]
     count: expect to load the max proc count
 "#;
 
-const PROC: &str = r#"proc <pid>
+const PROC: &str = r#"proc <pid> [fmt]
     query the proc data
+    fmt: display format with json|tree, the default is tree
 "#;
 
 const TASKS: &str = r#"tasks <pid>

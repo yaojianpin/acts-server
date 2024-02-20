@@ -3,6 +3,7 @@ use acts_channel::{
     ActionResult, Vars,
 };
 use chrono::prelude::*;
+use prettytable::{row, Table};
 
 pub fn process_result(name: &str, state: ActionResult) -> String {
     let mut result = String::new();
@@ -20,20 +21,17 @@ pub fn process_result(name: &str, state: ActionResult) -> String {
                     arr
                 })
                 .unwrap();
-            result.push_str(&format!(
-                "{:36}{:20}{:10}{:10}{:20}\n",
-                "id", "name", "version", "size", "time"
-            ));
+
+            let mut table = Table::new();
+            table.add_row(row!["id", "name", "version", "size", "time"]);
             for m in models {
-                result.push_str(&format!(
-                    "{:36}{:20}{:10}{:10}{:20}\n",
-                    m.id,
+                table.add_row(row![                    m.id,
                     m.name,
                     format!("{}", m.ver),
                     size(m.size),
-                    local_time(m.time)
-                ));
+                    local_time(m.time)]);
             }
+            table.printstd();
         }
         "procs" => {
             let vars = Vars::from_prost(&state.data.unwrap());
@@ -48,20 +46,17 @@ pub fn process_result(name: &str, state: ActionResult) -> String {
                     arr
                 })
                 .unwrap();
-            result.push_str(&format!(
-                "{:36}{:40}{:36}{:16}{:20}\n",
-                "pid", "name", "model id", "state", "start time"
-            ));
+            let mut table = Table::new();
+            table.add_row(row!["pid", "name", "model id", "state", "start time"]);
             for p in procs {
-                result.push_str(&format!(
-                    "{:36}{:40}{:36}{:16}{:20}\n",
+                table.add_row(row![
                     p.id,
                     p.name,
                     p.mid,
                     p.state,
-                    local_time(p.start_time)
-                ));
+                    local_time(p.start_time)]);
             }
+            table.printstd();
         }
         "tasks" => {
             let vars = Vars::from_prost(&state.data.unwrap());
@@ -76,52 +71,19 @@ pub fn process_result(name: &str, state: ActionResult) -> String {
                     arr
                 })
                 .unwrap();
-            result.push_str(&format!(
-                "{:12}{:16}{:16}{:16}{:16}{:20}{:20}\n",
-                "type", "tid", "name", "nid", "state", "start time", "end time",
-            ));
+            let mut table = Table::new();
+            table.add_row(row!["type", "tid", "name", "nid", "state", "start time", "end time"]);
             for p in tasks {
-                result.push_str(&format!(
-                    "{:12}{:16}{:16}{:16}{:16}{:20}{:20}\n",
-                    p.kind,
+                table.add_row(row![                    
+                    p.r#type,
                     p.id,
                     p.name,
                     p.node_id,
                     p.action_state,
                     local_time(p.start_time),
-                    local_time(p.end_time)
-                ));
+                    local_time(p.end_time)]);
             }
-        }
-        "acts" => {
-            let vars = Vars::from_prost(&state.data.unwrap());
-            let acts = vars
-                .get(name)
-                .map(|v| {
-                    let mut arr: Vec<TaskInfo> = Vec::new();
-                    for info in v.as_array().unwrap() {
-                        arr.push(info.into())
-                    }
-
-                    arr
-                })
-                .unwrap();
-            result.push_str(&format!(
-                "{:12}{:16}{:16}{:16}{:16}{:20}{:20}\n",
-                "type", "tid", "name", "nid", "state", "start time", "end time",
-            ));
-            for act in acts {
-                result.push_str(&format!(
-                    "{:12}{:16}{:16}{:16}{:16}{:20}{:20}\n",
-                    act.kind,
-                    act.id,
-                    act.name,
-                    act.node_id,
-                    act.action_state,
-                    local_time(act.start_time),
-                    local_time(act.end_time)
-                ));
-            }
+            table.printstd();
         }
         "start" | "submit" => {
             let vars = Vars::from_prost(&state.data.unwrap());

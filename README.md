@@ -6,16 +6,6 @@ a command client for acts-server
 
 the supported commands as follows:
 
-* query model data
-```
-model <mid> [tree]
-```
-
-* query task data
-```
-task <pid> <tid>
-```
-
 * deploy a workflow
 ```
 deploy <path>
@@ -47,6 +37,11 @@ sub <client_id> [type] [state] [tag] [key]
     5. sub all messages that the key starts with 123
     sub 1 * * * 123*
 ```
+* query model data
+```
+model <mid> [tree]
+```
+
 * remove model
 ```
 rm <key>
@@ -65,15 +60,11 @@ tasks <pid>
     pid: the proc id
 ```
 
-* update the proc variables
+* query task data
 ```
-update <pid> <aid>
-    pid: proc id
-    aid: act id
+task <pid> <tid>
+```
 
-    nodes: this command can execute with extra options
-    the options is from the env which is created through env command
-```
 env <op> [key] [value] [value-type]
     op: command with set, get, ls
             set: set key and value.
@@ -84,15 +75,7 @@ env <op> [key] [value] [value-type]
     value: env value
     value-type: value type with string, int, float and json, the default type is string
 
-* submit data
-```
-abort <pid> <aid>
-    pid: proc id
-    aid: act id
 
-    nodes: this command can execute with extra options
-    the options is from the env which is created through env command
-```
 
 * query the deployed models
 ```
@@ -102,25 +85,56 @@ models [count]
 
 * query a proc's information
 ```
-proc <pid> [tree]
+proc <pid> [tree|json]
     pid: proc id
     tree: show the proc tasks in tree
+    json show the proc tasks in json format
+```
+
+* push the act to a step
+```
+push <pid> <tid>
+    pid: proc id
+    tid: step task id
+
+    nodes: this command can execute with extra options
+    the options is from the env which is created through env command
+```
+
+* remove an act
+```
+remove <pid> <tid>
+    pid: proc id
+    tid: step task id
+
+    nodes: this command can execute with extra options
+    the options is from the env which is created through env command
+```
+
+* submit an act
+```
+submit <pid> <tid>
+    pid: proc id
+    tid: task id
+
+    nodes: this command can execute with extra options
+    the options is from the env which is created through env command
 ```
 
 *  back to the history task
 ```
-back <pid> <aid>
+back <pid> <tid>
     pid: proc id
-    aid: act id
+    tid: task id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
 ```
 * abort the workflow
 ```
-abort <pid> <aid>
+abort <pid> <tid>
     pid: proc id
-    aid: act id
+    tid: task id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
@@ -133,9 +147,9 @@ procs [count]
 ```
 * complete the act
 ```
-abort <pid> <aid>
+abort <pid> <tid>
     pid: proc id
-    aid: act id
+    tid: task id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
@@ -143,11 +157,13 @@ abort <pid> <aid>
 
 * cancel the act which is completed before
 ```
-cancel <pid> <aid>
+cancel <pid> <tid>
     pid: proc id
-    aid: act id
+    tid: act task id
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
 ```
+
+
 
