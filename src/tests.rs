@@ -9,7 +9,7 @@ async fn grpc_start() {
     let port = 10081;
 
     tokio::spawn(async move {
-        let addr = format!("0.0.0.0:{port}").parse().unwrap();
+        let addr = format!("127.0.0.1:{port}").parse().unwrap();
         grpc::start(addr, &options).await.unwrap();
     });
 
@@ -23,7 +23,7 @@ async fn grpc_action_ok() {
     let port = 10082;
 
     tokio::spawn(async move {
-        let addr = format!("0.0.0.0:{port}").parse().unwrap();
+        let addr = format!("127.0.0.1:{port}").parse().unwrap();
         grpc::start(addr, &options).await.unwrap();
     });
 
@@ -41,7 +41,7 @@ async fn grpc_action_err() {
     let port = 10083;
 
     tokio::spawn(async move {
-        let addr = format!("0.0.0.0:{port}").parse().unwrap();
+        let addr = format!("127.0.0.1:{port}").parse().unwrap();
         grpc::start(addr, &options).await.unwrap();
     });
 
@@ -60,7 +60,7 @@ async fn grpc_message_all() {
     let port = 10084;
 
     tokio::spawn(async move {
-        let addr = format!("0.0.0.0:{port}").parse().unwrap();
+        let addr = format!("127.0.0.1:{port}").parse().unwrap();
         grpc::start(addr, &options).await.unwrap();
     });
 
@@ -96,7 +96,7 @@ async fn grpc_message_filter() {
     let port = 10085;
 
     tokio::spawn(async move {
-        let addr = format!("0.0.0.0:{port}").parse().unwrap();
+        let addr = format!("127.0.0.1:{port}").parse().unwrap();
         grpc::start(addr, &options).await.unwrap();
     });
 
