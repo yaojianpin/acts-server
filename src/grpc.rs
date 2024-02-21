@@ -7,19 +7,15 @@ use futures::Stream;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{net::SocketAddr, pin::Pin, sync::Arc};
-use time::macros::format_description;
 use tokio::sync::{
     mpsc::{self, Sender},
     Mutex,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Code, Request, Response, Status};
-use tracing_subscriber::fmt::time::LocalTime;
-use tracing_subscriber::fmt::writer::MakeWriterExt;
-use tracing_subscriber::EnvFilter;
 
 type MessageStream = Pin<Box<dyn Stream<Item = Result<WorkflowMessage, Status>> + Send>>;
-const ACTS_ENV_LOG: &str = "ACTS_LOG";
+
 macro_rules! wrap_state_result {
     ($input: expr) => {
         match $input {
@@ -92,7 +88,7 @@ impl GrpcServer {
         inst
     }
 
-    pub fn do_action(&self, name: &str, options: &Vars) -> Result<Response<ActionResult>, Status> {
+    fn do_action(&self, name: &str, options: &Vars) -> Result<Response<ActionResult>, Status> {
         tracing::debug!("do-action  name={name} options={options}");
         let executor = self.engine.executor();
         match name {
@@ -486,16 +482,27 @@ pub async fn start(
     Ok(())
 }
 
-fn init_log(opt: &acts::Options) {
-    let file_appender = tracing_appender::rolling::hourly(&opt.log_dir, "acts.log");
-    let timer = LocalTime::new(format_description!(
-        "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:9]"
-    ));
-    std::env::set_var(ACTS_ENV_LOG, &opt.log_level);
-    tracing_subscriber::fmt()
-        .with_timer(timer)
-        .with_env_filter(EnvFilter::from_env(ACTS_ENV_LOG))
-        .with_writer(std::io::stdout.and(file_appender))
-        .with_ansi(false)
-        .init();
+fn init_log(#[allow(unused_variables)] opt: &acts::Options) {
+    // disable the set_global_default error in tests
+    #[cfg(not(test))]
+    {
+        use time::macros::format_description;
+        use tracing_subscriber::fmt::time::LocalTime;
+        use tracing_subscriber::fmt::writer::MakeWriterExt;
+        use tracing_subscriber::EnvFilter;
+
+        const ACTS_ENV_LOG: &str = "ACTS_LOG";
+
+        let file_appender = tracing_appender::rolling::hourly(&opt.log_dir, "acts.log");
+        let timer = LocalTime::new(format_description!(
+            "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:9]"
+        ));
+        std::env::set_var(ACTS_ENV_LOG, &opt.log_level);
+        tracing_subscriber::fmt()
+            .with_timer(timer)
+            .with_env_filter(EnvFilter::from_env(ACTS_ENV_LOG))
+            .with_writer(std::io::stdout.and(file_appender))
+            .with_ansi(false)
+            .init();
+    }
 }

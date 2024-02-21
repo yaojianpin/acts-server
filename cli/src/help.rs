@@ -95,11 +95,38 @@ const SUBMIT: &str = r#"submit <pid> <tid>
     the options is from the env which is created through env command
 "#;
 
+const PUSH: &str = r#"push <pid> <tid>
+    push an action to a step
+
+    pid: proc id
+    tid: step task id
+
+    extra options:
+        id: act id, it is reqiured
+        name: act name
+        inputs: input parameters
+        outputs: expose vars to its parents
+        rets: limits the request options when acting
+
+    nodes: this command can execute with extra options
+    the options is from the env which is created through env command
+"#;
+
+const REMOVE: &str = r#"remove <pid> <tid>
+    remove an action
+
+    pid: proc id
+    tid: task id
+"#;
+
 const BACK: &str = r#"back <pid> <tid>
     back to the history task
 
     pid: proc id
     tid: task id
+
+    extra options:
+        to: set a step id to point out which step to back
 
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
@@ -125,7 +152,7 @@ const ABORT: &str = r#"abort <pid> <tid>
     the options is from the env which is created through env command
 "#;
 
-const COMPLETE: &str = r#"abort <pid> <tid>
+const COMPLETE: &str = r#"complete <pid> <tid>
     complete the act
 
     pid: proc id
@@ -150,6 +177,10 @@ const ERROR: &str = r#"error <pid> <tid>
 
     pid: proc id
     tid: task id
+
+    options:
+        err_code:  error code, it is required
+        err_message: error message
     
     nodes: this command can execute with extra options
     the options is from the env which is created through env command
@@ -168,6 +199,8 @@ pub const MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
         ("task", TASK),
         ("deploy", DEPLOY),
         ("start", START),
+        ("push", PUSH),
+        ("remove", REMOVE),
         ("submit", SUBMIT),
         ("back", BACK),
         ("cancel", CANCEL),

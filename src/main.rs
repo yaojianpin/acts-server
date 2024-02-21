@@ -3,6 +3,8 @@ use std::{fs, path::Path};
 
 mod config;
 mod grpc;
+#[cfg(test)]
+mod tests;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
