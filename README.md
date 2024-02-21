@@ -1,5 +1,8 @@
 # acts-server
-create a acts workflow server based on  [`acts`](https://github.com/yaojianpin/acts) lib
+[![Build](https://github.com/yaojianpin/acts-server/actions/workflows/build.yml/badge.svg)](https://github.com/yaojianpin/acts-server/actions?workflow=build)
+[![Release](https://github.com/yaojianpin/acts-server/actions/workflows/release.yml/badge.svg)](https://github.com/yaojianpin/acts-server/actions?workflow=release)
+
+Create a acts workflow server based on  [`acts`](https://github.com/yaojianpin/acts) lib
 
 # acts-cli
 a command client for acts-server
