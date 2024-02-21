@@ -30,8 +30,9 @@ dependencies = [
 
 [[package]]
 name = "acts-channel"
-version = "0.3.0"
-source = "git+https://github.com/yaojianpin/acts-channel.git#f3d20eeba44dd1ab6078adbaa6a2a4f0b39551cc"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "197b0b2400ff777a0b6bcd29a6f10d6a8216ff18174a0b32b784a14f197c5510"
 dependencies = [
  "futures",
  "prost",
