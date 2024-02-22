@@ -65,7 +65,6 @@ const PROC: &str = r#"proc <pid> [fmt]
 
 const TASKS: &str = r#"tasks <pid>
     query the proc tasks
-
     pid: the proc id
 "#;
 
