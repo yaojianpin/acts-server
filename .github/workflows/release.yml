@@ -10,6 +10,8 @@ on:
 jobs:
   build-release:
     name: build-release
+    permissions:
+      contents: write
     strategy:
       matrix:
         build: [linux-x86_64,macos-x86_64,windows-x86_64-gnu]
