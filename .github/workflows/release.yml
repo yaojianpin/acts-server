@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - 'v*'
 jobs:
   build-release:
     name: build-release
@@ -14,7 +14,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        build: [linux-x86_64,macos-x86_64,windows-x86_64-gnu]
+        build: [linux-x86_64, macos-x86_64, windows-x86_64-gnu]
         include:
           - build: linux-x86_64
             os: ubuntu-latest
@@ -57,10 +57,12 @@ jobs:
           cp {README.md,LICENSE,acts.conf} "$staging/"
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             cp target/${{matrix.target}}/release/acts-server.exe "$staging/"
+            cp target/${{matrix.target}}/release/acts-cli.exe "$staging/"
             7z a "$staging.zip" "$staging"
             echo "ASSET=$staging.zip" >> $GITHUB_ENV
           else
             cp target/${{matrix.target}}/release/acts-server "$staging/"
+            cp target/${{matrix.target}}/release/acts-cli "$staging/"
             tar czf "$staging.tar.gz" "$staging"
             echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
           fi
