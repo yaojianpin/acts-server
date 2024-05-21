@@ -35,21 +35,6 @@ dependencies = [
 [[package]]
 name = "acts-channel"
 version = "0.4.0"
-dependencies = [
- "chrono",
- "futures",
- "prost",
- "prost-types",
- "serde",
- "serde_json",
- "tokio",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
-name = "acts-channel"
-version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1870faa825ea8c71517492b869dd8eb89362f0bd9c2453ad637d2744a87d8d6e"
 dependencies = [
@@ -68,7 +53,7 @@ dependencies = [
 name = "acts-cli"
 version = "0.5.0"
 dependencies = [
- "acts-channel 0.4.0",
+ "acts-channel",
  "chrono",
  "clap 4.5.1",
  "futures",
@@ -85,7 +70,7 @@ name = "acts-server"
 version = "0.5.0"
 dependencies = [
  "acts",
- "acts-channel 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "acts-channel",
  "futures",
  "globset",
  "hocon",
