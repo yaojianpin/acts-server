@@ -1,11 +1,11 @@
 use crate::grpc;
-use acts::Options;
+use acts::Config;
 use acts_channel::{ActsChannel, ActsOptions, Vars};
 use std::sync::{Arc, Mutex};
 
 #[tokio::test]
 async fn grpc_start() {
-    let options = Options::default();
+    let options = Config::default();
     let port = 10081;
 
     tokio::spawn(async move {
@@ -19,7 +19,7 @@ async fn grpc_start() {
 
 #[tokio::test]
 async fn grpc_action_ok() {
-    let options = Options::default();
+    let options = Config::default();
     let port = 10082;
 
     tokio::spawn(async move {
@@ -37,7 +37,7 @@ async fn grpc_action_ok() {
 
 #[tokio::test]
 async fn grpc_action_err() {
-    let options = Options::default();
+    let options = Config::default();
     let port = 10083;
 
     tokio::spawn(async move {
@@ -56,7 +56,7 @@ async fn grpc_action_err() {
 #[tokio::test]
 async fn grpc_message_all() {
     let messages = Arc::new(Mutex::new(Vec::new()));
-    let options = Options::default();
+    let options = Config::default();
     let port = 10084;
 
     tokio::spawn(async move {
@@ -92,7 +92,7 @@ async fn grpc_message_all() {
 #[tokio::test]
 async fn grpc_message_filter() {
     let messages = Arc::new(Mutex::new(Vec::new()));
-    let options = Options::default();
+    let options = Config::default();
     let port = 10085;
 
     tokio::spawn(async move {

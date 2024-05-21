@@ -9,8 +9,8 @@ license = "Apache-2.0"
 repository = "https://github.com/yaojianpin/acts-server.git"
 
 [dependencies]
-acts = { version = "0.9.0", features = ["store"] }
-acts-channel = { version = "0.3.2" }
+acts = { version = "0.10.3", features = ["store"] }
+acts-channel = { version = "0.4.0" }
 futures = "0.3.27"
 globset = "0.4.10"
 hocon = "0.9.0"

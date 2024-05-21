@@ -1,4 +1,4 @@
-use acts::Options;
+use acts::Config;
 use std::{fs, path::Path};
 
 mod config;
@@ -9,7 +9,7 @@ mod tests;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut port = 10080;
-    let mut options = Options::default();
+    let mut options = Config::default();
     if let Ok(conf_file) = fs::read_to_string(&Path::new("acts.conf")) {
         if let Ok(conf) = hocon::de::from_str::<config::Config>(&conf_file) {
             port = conf.port.unwrap_or(10080);

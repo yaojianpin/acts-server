@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-const ENV: &str = r#"env <op> [key] [value] [value-type]
+const ENV: &str = r#"env <op> [key] [value] [type]
     op: command with set, get, ls
             set: set key and value.
             get: get by key name
@@ -9,12 +9,16 @@ const ENV: &str = r#"env <op> [key] [value] [value-type]
             json: show in json format
     key: env key with string type
     value: env value
-    value-type: value type with string, int, float and json, the default type is string
+    type: value type with string, int, float and json, the default type is json
 "#;
 
-const RM: &str = r#"rm <proc|model> <key>
-    proc <pid>: use to remove proc by pid
-    model <mid>: use to remove model by mid
+const RM: &str = r#"rm <name> <id>
+    name: model|message|package
+    id: the id for the store name
+"#;
+
+const RESEND: &str = r#"resend
+   resend the error messages
 "#;
 
 const SUB: &str = r#"sub <client_id> [type] [state] [tag] [key]
@@ -49,7 +53,7 @@ const MODELS: &str = r#"models [count]
 const MODEL: &str = r#"model <mid> [fmt]
     query the model data
     mid: model id
-    fmt: display format with text|json|tree
+    fmt: display format with json|tree
 "#;
 
 const PROCS: &str = r#"procs [count]
@@ -70,6 +74,21 @@ const TASKS: &str = r#"tasks <pid>
 
 const TASK: &str = r#"task <pid> <tid>
     query the task data
+"#;
+
+const MESSAGES: &str = r#"messages <pid>
+    query the proc messages
+    pid: the proc id
+"#;
+
+const MESSAGE: &str = r#"message <id>
+    show the message details
+    id: the message id
+"#;
+
+const PACKAGES: &str = r#"packages [count]
+    query the packages
+    count: expect to load the max count
 "#;
 
 const DEPLOY: &str = r#"deploy <path>
@@ -195,6 +214,9 @@ pub const MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
         ("procs", PROCS),
         ("proc", PROC),
         ("tasks", TASKS),
+        ("messages", MESSAGES),
+        ("message", MESSAGE),
+        ("packages", PACKAGES),
         ("task", TASK),
         ("deploy", DEPLOY),
         ("start", START),
@@ -207,6 +229,7 @@ pub const MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
         ("complete", COMPLETE),
         ("skip", SKIP),
         ("error", ERROR),
+        ("resend", RESEND),
     ])
 });
 

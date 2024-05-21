@@ -66,7 +66,7 @@ impl<'a> Command<'a> {
                     "set" => {
                         let key = args.get(1).ok_or(Status::invalid_argument(help_text))?;
                         let last = args.last().unwrap();
-                        let mut vtype = EnvValueType::String;
+                        let mut vtype = EnvValueType::Json;
                         let mut end_index = args.len() - 1;
                         if vec!["json", "int", "float", "string"].contains(last) {
                             end_index = args.len() - 2;
@@ -109,12 +109,13 @@ impl<'a> Command<'a> {
                 };
             }
             "rm" => {
-                let mid = args
-                    .get(0)
-                    .cloned()
-                    .ok_or(Status::invalid_argument(help_text))?;
+                let target_name = args.get(0).ok_or(Status::invalid_argument(help_text))?;
+                let id = args.get(1).ok_or(Status::invalid_argument(help_text))?;
 
-                let resp = self.client.rm(mid).await?;
+                let mut options = Vars::new();
+                options.insert_str("name".to_string(), target_name.to_string());
+                options.insert_str("id".to_string(), id.to_string());
+                let resp = self.client.rm(&options).await?;
                 ret = util::process_result(name, resp);
             }
 
@@ -164,7 +165,8 @@ impl<'a> Command<'a> {
                 let resp = self.client.do_action(name, &options).await?;
                 ret = util::process_result(name, resp);
             }
-            "submit" | "back" | "cancel" | "abort" | "complete" | "skip" | "error" | "push" | "remove" => {
+            "submit" | "back" | "cancel" | "abort" | "complete" | "skip" | "error" | "push"
+            | "remove" => {
                 let pid = args.get(0).ok_or(Status::invalid_argument(help_text))?;
                 let tid = args.get(1).ok_or(Status::invalid_argument(help_text))?;
                 let mut options = Vars::new();
@@ -175,8 +177,12 @@ impl<'a> Command<'a> {
                 let resp = self.client.do_action(name, &options).await?;
                 ret = util::process_result(name, resp);
             }
-
-            "models" | "procs" => {
+            "resend" => {
+                let options = Vars::new();
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
+            }
+            "models" | "procs" | "packages" => {
                 let mut options = Vars::new();
                 if let Some(count) = args.get(0) {
                     options.insert_number(
@@ -224,7 +230,7 @@ impl<'a> Command<'a> {
                 let resp = self.client.do_action(name, &options).await?;
                 ret = util::process_result(name, resp);
             }
-            "tasks" => {
+            "tasks" | "messages" => {
                 let mut options = Vars::new();
                 options.insert_str(
                     "pid".to_string(),
@@ -255,6 +261,18 @@ impl<'a> Command<'a> {
                 options.insert_str(
                     "tid".to_string(),
                     args.get(1)
+                        .cloned()
+                        .ok_or(Status::invalid_argument(help_text))?,
+                );
+                options.extend(&self.env);
+                let resp = self.client.do_action(name, &options).await?;
+                ret = util::process_result(name, resp);
+            }
+            "message" => {
+                let mut options = Vars::new();
+                options.insert_str(
+                    "id".to_string(),
+                    args.get(0)
                         .cloned()
                         .ok_or(Status::invalid_argument(help_text))?,
                 );

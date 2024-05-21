@@ -4,7 +4,7 @@ name = "acts-cli"
 version = "0.3.0"
 
 [dependencies]
-acts-channel = { version = "0.3.2" }
+acts-channel = { version = "0.4.0", path = "../../acts-channel" }
 chrono = "0.4.24"
 clap = { version = "4.5.1", features = ["derive"] }
 futures = "0.3.27"

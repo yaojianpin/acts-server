@@ -1,11 +1,10 @@
-use acts::{Engine, Workflow};
+use acts::{ActError, Builder, ChannelOptions, Engine, Message, Workflow};
 use acts_channel::{
-    acts_service_server::*, model::ActValue, ActionOptions, ActionResult, MessageOptions, Vars,
-    WorkflowMessage, WorkflowModel,
+    acts_service_server::*, ActionOptions, MessageOptions, ProtoJsonValue, Vars, WorkflowMessage,
+    WorkflowModel,
 };
 use futures::Stream;
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::{net::SocketAddr, pin::Pin, sync::Arc};
 use tokio::sync::{
     mpsc::{self, Sender},
@@ -16,26 +15,14 @@ use tonic::{transport::Server, Code, Request, Response, Status};
 
 type MessageStream = Pin<Box<dyn Stream<Item = Result<WorkflowMessage, Status>> + Send>>;
 
-macro_rules! wrap_state_result {
-    ($input: expr) => {
-        match $input {
-            Ok(state) => {
-                let vars = Vars::from_json(state.outputs());
-                Ok(Response::new(ActionResult {
-                    start_time: state.start_time,
-                    end_time: state.end_time,
-                    data: Some(vars.prost_vars()),
-                }))
-            }
-            Err(err) => Err(Status::new(Code::Internal, err.to_string())),
-        }
-    };
-}
-
 macro_rules! wrap_result {
-    ($input: expr) => {
+    ($name:expr, $input: expr) => {
         match $input {
-            Ok(state) => Ok(Response::new(state)),
+            Ok(data) => {
+                let mut vars = Vars::new();
+                vars.insert($name, &data.into());
+                Ok(Response::new(vars.prost_vars()))
+            }
             Err(err) => Err(Status::new(Code::Internal, err.to_string())),
         }
     };
@@ -43,32 +30,52 @@ macro_rules! wrap_result {
 
 #[derive(Clone)]
 pub struct MessageClient {
-    client_id: String,
     addr: String,
     sender: Sender<Result<WorkflowMessage, Status>>,
-    match_options: MatchOptions,
-}
-
-#[derive(Clone)]
-pub struct MatchOptions {
-    r#type: String,
-    state: String,
-    tag: String,
-    key: String,
+    options: ChannelOptions,
 }
 
 impl MessageClient {
-    fn matches(&self, message: &WorkflowMessage) -> std::result::Result<bool, globset::Error> {
-        let pat_type = globset::Glob::new(&self.match_options.r#type)?.compile_matcher();
-        let pat_state = globset::Glob::new(&self.match_options.state)?.compile_matcher();
-        let pat_tag = globset::Glob::new(&self.match_options.tag)?.compile_matcher();
-        let pat_key = globset::Glob::new(&self.match_options.key)?.compile_matcher();
+    fn send(&self, msg: &Message) {
+        let inputs = Vars::from_json(&msg.inputs);
+        let outputs = Vars::from_json(&msg.outputs);
+        let message = WorkflowMessage {
+            id: msg.id.clone(),
+            name: msg.name.clone(),
+            source: msg.source.clone(),
+            r#type: msg.r#type.clone(),
+            model: Some(WorkflowModel {
+                id: msg.model.id.clone(),
+                name: msg.model.name.clone(),
+                tag: msg.model.tag.clone(),
+            }),
+            key: msg.key.clone(),
+            pid: msg.pid.clone(),
+            tid: msg.tid.clone(),
+            state: msg.state.to_string(),
+            tag: msg.tag.clone(),
+            start_time: msg.start_time,
+            end_time: msg.end_time,
 
-        let model = message.model.clone().unwrap();
-        Ok(pat_type.is_match(&message.r#type)
-            && pat_state.is_match(&message.state)
-            && (pat_tag.is_match(&message.tag) || pat_tag.is_match(&model.tag))
-            && pat_key.is_match(&message.key))
+            inputs: Some(inputs.prost_vars()),
+            outputs: Some(outputs.prost_vars()),
+        };
+        let msg = Ok(message.clone());
+        let client = self.clone();
+        tokio::spawn(async move {
+            match client.sender.send(msg).await {
+                Ok(_) => {
+                    println!("[OK] send to {}({})", client.addr, client.options.id);
+                }
+                Err(err) => {
+                    println!(
+                        "[ERROR] send to {}({}), error={:?}",
+                        client.addr, client.options.id, err
+                    );
+                    // clients.remove(index);
+                }
+            }
+        });
     }
 }
 
@@ -88,8 +95,8 @@ impl GrpcServer {
         inst
     }
 
-    fn do_action(&self, name: &str, options: &Vars) -> Result<Response<ActionResult>, Status> {
-        tracing::debug!("do-action  name={name} options={options}");
+    fn do_action(&self, name: &str, options: &Vars) -> Result<Response<ProtoJsonValue>, Status> {
+        tracing::info!("do-action  name={name} options={options}");
         let executor = self.engine.executor();
         match name {
             "push" => {
@@ -99,8 +106,7 @@ impl GrpcServer {
                 let tid = options
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
-
-                wrap_state_result!(executor.push(pid, tid, &options.json_vars().into()))
+                wrap_result!(name, executor.push(pid, tid, &options.json_vars().into()))
             }
             "remove" => {
                 let pid = options
@@ -110,7 +116,7 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_state_result!(executor.remove(pid, tid, &options.json_vars().into()))
+                wrap_result!(name, executor.remove(pid, tid, &options.json_vars().into()))
             }
             "submit" => {
                 let pid = options
@@ -120,7 +126,7 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_state_result!(executor.submit(pid, tid, &options.json_vars().into()))
+                wrap_result!(name, executor.submit(pid, tid, &options.json_vars().into()))
             }
             "complete" => {
                 let pid = options
@@ -130,7 +136,10 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_state_result!(executor.complete(pid, tid, &options.json_vars().into()))
+                wrap_result!(
+                    name,
+                    executor.complete(pid, tid, &options.json_vars().into())
+                )
             }
             "abort" => {
                 let pid = options
@@ -140,7 +149,7 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_state_result!(executor.abort(pid, tid, &options.json_vars().into()))
+                wrap_result!(name, executor.abort(pid, tid, &options.json_vars().into()))
             }
             "cancel" => {
                 let pid = options
@@ -150,7 +159,7 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_state_result!(executor.cancel(pid, tid, &options.json_vars().into()))
+                wrap_result!(name, executor.cancel(pid, tid, &options.json_vars().into()))
             }
             "back" => {
                 let pid = options
@@ -160,7 +169,7 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_state_result!(executor.back(pid, tid, &options.json_vars().into()))
+                wrap_result!(name, executor.back(pid, tid, &options.json_vars().into()))
             }
             "skip" => {
                 let pid = options
@@ -170,7 +179,7 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_state_result!(executor.skip(pid, tid, &options.json_vars().into()))
+                wrap_result!(name, executor.skip(pid, tid, &options.json_vars().into()))
             }
             "error" => {
                 let pid = options
@@ -180,47 +189,37 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_state_result!(executor.error(pid, tid, &options.json_vars().into()))
+                wrap_result!(name, executor.error(pid, tid, &options.json_vars().into()))
             }
             "models" => {
                 let count = options.value_number("count").map_or(100, |v| v as usize);
                 let manager = self.engine.manager();
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                let ret = manager.models(count).map(|data| {
-                    let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-
-                    let mut arr: Vec<ActValue> = Vec::new();
-                    for info in data {
-                        arr.push(info.into());
-                    }
-
-                    let mut vars = Vars::new();
-                    vars.insert(name, &ActValue::Array(arr));
-                    ActionResult {
-                        start_time: start_time.as_millis() as i64,
-                        end_time: end_time.as_millis() as i64,
-                        data: Some(vars.prost_vars()),
-                    }
-                });
-                wrap_result!(ret)
+                let ret = manager.models(count);
+                wrap_result!(name, ret)
             }
             "rm" => {
-                let model_id = options
-                    .value_str("mid")
-                    .ok_or(Status::invalid_argument("mid is required"))?;
+                let target = options
+                    .value_str("name")
+                    .ok_or(Status::invalid_argument("name is required"))?;
+                let id = options
+                    .value_str("id")
+                    .ok_or(Status::invalid_argument("id is required"))?;
                 let manager = self.engine.manager();
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                let ret = manager.remove(model_id).map(|data| {
-                    let mut vars = Vars::new();
-                    vars.insert(name, &data.into());
-                    let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                    ActionResult {
-                        start_time: start_time.as_millis() as i64,
-                        end_time: end_time.as_millis() as i64,
-                        data: Some(vars.prost_vars()),
-                    }
-                });
-                wrap_result!(ret)
+                let ret = match target {
+                    "model" => manager.rm_model(id),
+                    "package" => manager.rm_package(id),
+                    "message" => manager.rm_message(id),
+                    _ => Err(ActError::Runtime(
+                        "the name must be one of 'model', 'package' and 'message'".to_string(),
+                    )),
+                };
+                wrap_result!(name, ret)
+            }
+
+            "resend" => {
+                let manager = self.engine.manager();
+                let ret = manager.resend_error_messages();
+                wrap_result!(name, ret)
             }
             "model" => {
                 let mid = options
@@ -228,18 +227,8 @@ impl GrpcServer {
                     .ok_or(Status::invalid_argument("mid is required"))?;
                 let fmt = options.value_str("fmt").unwrap_or("text");
                 let manager = self.engine.manager();
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                let ret = manager.model(mid, fmt).map(|data| {
-                    let mut vars = Vars::new();
-                    vars.insert(name, &data.into());
-                    let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                    ActionResult {
-                        start_time: start_time.as_millis() as i64,
-                        end_time: end_time.as_millis() as i64,
-                        data: Some(vars.prost_vars()),
-                    }
-                });
-                wrap_result!(ret)
+                let ret = manager.model(mid, fmt);
+                wrap_result!(name, ret)
             }
             "deploy" => {
                 let model_text = options
@@ -251,48 +240,21 @@ impl GrpcServer {
                 if let Some(mid) = options.value_str("mid") {
                     model.set_id(mid);
                 };
-                wrap_state_result!(self.engine.manager().deploy(&model))
+                wrap_result!(name, self.engine.manager().deploy(&model))
             }
             "procs" => {
                 let count = options.value_number("count").map_or(100, |v| v as usize);
                 let manager = self.engine.manager();
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                let ret = manager.procs(count).map(|data| {
-                    tracing::info!("procs={:?}", data);
-                    let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                    let mut arr: Vec<ActValue> = Vec::new();
-                    for info in data {
-                        arr.push(info.into());
-                    }
-
-                    let mut vars = Vars::new();
-                    vars.insert(name, &ActValue::Array(arr));
-                    ActionResult {
-                        start_time: start_time.as_millis() as i64,
-                        end_time: end_time.as_millis() as i64,
-                        data: Some(vars.prost_vars()),
-                    }
-                });
-                wrap_result!(ret)
+                let ret = manager.procs(count);
+                wrap_result!(name, ret)
             }
             "proc" => {
                 let pid = options
                     .value_str("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
-                let fmt = options.value_str("fmt").unwrap_or("tree");
                 let manager = self.engine.manager();
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                let ret = manager.proc(pid, fmt).map(|data| {
-                    let mut vars = Vars::new();
-                    vars.insert(name, &data.into());
-                    let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                    ActionResult {
-                        start_time: start_time.as_millis() as i64,
-                        end_time: end_time.as_millis() as i64,
-                        data: Some(vars.prost_vars()),
-                    }
-                });
-                wrap_result!(ret)
+                let ret = manager.proc(pid);
+                wrap_result!(name, ret)
             }
             "tasks" => {
                 let pid = options
@@ -300,25 +262,23 @@ impl GrpcServer {
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let count = options.value_number("count").map_or(100, |v| v as usize);
                 let manager = self.engine.manager();
-
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                let ret = manager.tasks(pid, count).map(|data| {
-                    let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-
-                    let mut arr: Vec<ActValue> = Vec::new();
-                    for info in data {
-                        arr.push(info.into());
-                    }
-
-                    let mut vars = Vars::new();
-                    vars.insert(name, &ActValue::Array(arr));
-                    ActionResult {
-                        start_time: start_time.as_millis() as i64,
-                        end_time: end_time.as_millis() as i64,
-                        data: Some(vars.prost_vars()),
-                    }
-                });
-                wrap_result!(ret)
+                let ret = manager.tasks(pid, count);
+                wrap_result!(name, ret)
+            }
+            "packages" => {
+                let count = options.value_number("count").map_or(100, |v| v as usize);
+                let manager = self.engine.manager();
+                let ret = manager.packages(count);
+                wrap_result!(name, ret)
+            }
+            "messages" => {
+                let pid = options
+                    .value_str("pid")
+                    .ok_or(Status::invalid_argument("pid is required"))?;
+                let count = options.value_number("count").map_or(100, |v| v as usize);
+                let manager = self.engine.manager();
+                let ret = manager.messages(pid, count);
+                wrap_result!(name, ret)
             }
             "task" => {
                 let pid = options
@@ -328,90 +288,41 @@ impl GrpcServer {
                     .value_str("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
                 let manager = self.engine.manager();
-
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                let ret = manager.task(pid, tid).map(|data| {
-                    let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                    let mut vars = Vars::new();
-                    vars.insert(name, &data.into());
-                    ActionResult {
-                        start_time: start_time.as_millis() as i64,
-                        end_time: end_time.as_millis() as i64,
-                        data: Some(vars.prost_vars()),
-                    }
-                });
-                wrap_result!(ret)
+                let ret = manager.task(pid, tid);
+                wrap_result!(name, ret)
+            }
+            "message" => {
+                let id = options
+                    .value_str("id")
+                    .ok_or(Status::invalid_argument("id is required"))?;
+                let manager = self.engine.manager();
+                let ret = manager.message(id);
+                wrap_result!(name, ret)
             }
             "start" => {
                 let mid = options
                     .value_str("mid")
                     .ok_or(Status::invalid_argument("mid is required"))?;
-
-                wrap_state_result!(executor.start(mid, &options.json_vars().into()))
+                wrap_result!(name, executor.start(mid, &options.json_vars().into()))
+            }
+            "ack" => {
+                let id = options
+                    .value_str("id")
+                    .ok_or(Status::invalid_argument("id is required"))?;
+                wrap_result!(name, executor.ack(id))
             }
             _ => Err(Status::not_found(format!("not found action '{name}'"))),
         }
     }
 
-    pub fn init(&self) {
-        let emitter = self.engine.emitter();
-        let grpc = self.clone();
-        emitter.on_message(move |e| {
-            let msg = e.inner();
-            let inputs = Vars::from_json(&msg.inputs);
-            let outputs = Vars::from_json(&msg.outputs);
-            let message = WorkflowMessage {
-                id: msg.id.clone(),
-                name: msg.name.clone(),
-                source: msg.source.clone(),
-                r#type: msg.r#type.clone(),
-                model: Some(WorkflowModel {
-                    id: msg.model.id.clone(),
-                    name: msg.model.name.clone(),
-                    tag: msg.model.tag.clone(),
-                }),
-                key: msg.key.clone(),
-                proc_id: msg.proc_id.clone(),
-                state: msg.state.clone(),
-                tag: msg.tag.clone(),
-                start_time: msg.start_time,
-                end_time: msg.end_time,
-
-                inputs: Some(inputs.prost_vars()),
-                outputs: Some(outputs.prost_vars()),
-            };
-
-            let grpc = grpc.clone();
-            tokio::spawn(async move {
-                grpc.send_message(&message).await;
-            });
-        });
-    }
-
-    pub async fn send_message(&self, message: &WorkflowMessage) {
+    pub async fn init(&self) {
         let clients = self.clients.lock().await;
         for (_, client) in clients.iter() {
-            match client.matches(message) {
-                Ok(is_match) => {
-                    if !is_match {
-                        continue;
-                    }
-                }
-                Err(err) => {
-                    println!("[Error matches] client={} {}", client.addr, err);
-                    continue;
-                }
-            }
-            let msg = Ok(message.clone());
-            match client.sender.send(msg).await {
-                Ok(_) => {
-                    println!("[OK] send to {}", client.client_id);
-                }
-                Err(err) => {
-                    println!("[ERROR] send to {}, error={:?}", client.client_id, err);
-                    // clients.remove(index);
-                }
-            }
+            let chan = self.engine.channel_with_options(&client.options);
+            let c = client.clone();
+            chan.on_message(move |e| {
+                c.send(e);
+            });
         }
     }
 }
@@ -435,14 +346,15 @@ impl ActsService for GrpcServer {
             clients.remove(&options.client_id);
         }
         let client = MessageClient {
-            client_id: options.client_id.clone(),
             addr: addr.to_string(),
             sender: tx,
-            match_options: MatchOptions {
+            options: ChannelOptions {
                 r#type: options.r#type.clone(),
                 state: options.state.clone(),
                 tag: options.tag.clone(),
                 key: options.key.clone(),
+                ack: true,
+                id: options.client_id.clone(),
             },
         };
         clients
@@ -450,11 +362,20 @@ impl ActsService for GrpcServer {
             .and_modify(|entry| *entry = client.clone())
             .or_insert(client.clone());
 
+        let chan = self.engine.channel_with_options(&client.options);
+        let c = client.clone();
+        chan.on_message(move |e| {
+            c.send(e);
+        });
+
         let out_stream = ReceiverStream::new(rx);
         Ok(Response::new(Box::pin(out_stream) as Self::OnMessageStream))
     }
 
-    async fn action(&self, req: Request<ActionOptions>) -> Result<Response<ActionResult>, Status> {
+    async fn action(
+        &self,
+        req: Request<ActionOptions>,
+    ) -> Result<Response<ProtoJsonValue>, Status> {
         let cmd = req.into_inner();
         let name = cmd.name;
         let vars = Vars::from_prost(
@@ -465,16 +386,14 @@ impl ActsService for GrpcServer {
     }
 }
 
-pub async fn start(
-    addr: SocketAddr,
-    opt: &acts::Options,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start(addr: SocketAddr, opt: &acts::Config) -> Result<(), Box<dyn std::error::Error>> {
     init_log(opt);
 
-    let engine = Arc::new(Engine::new_with_options(opt));
-    engine.start();
+    let mut builder = Builder::new();
+    builder.set_config(&opt);
+    let engine = Arc::new(builder.build());
     let server = GrpcServer::new(&engine);
-    server.init();
+    server.init().await;
     let grpc = ActsServiceServer::new(server);
 
     Server::builder().add_service(grpc).serve(addr).await?;
@@ -482,7 +401,7 @@ pub async fn start(
     Ok(())
 }
 
-fn init_log(#[allow(unused_variables)] opt: &acts::Options) {
+fn init_log(#[allow(unused_variables)] opt: &acts::Config) {
     // disable the set_global_default error in tests
     #[cfg(not(test))]
     {

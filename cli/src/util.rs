@@ -1,5 +1,5 @@
 use acts_channel::{
-    model::{ModelInfo, ProcInfo, TaskInfo},
+    model::{MessageInfo, ModelInfo, PackageInfo, ProcInfo, TaskInfo},
     ActionResult, Vars,
 };
 use chrono::prelude::*;
@@ -9,7 +9,7 @@ pub fn process_result(name: &str, state: ActionResult) -> String {
     let mut result = String::new();
     match name {
         "models" => {
-            let vars = Vars::from_prost(&state.data.unwrap());
+            let vars = Vars::from_prost(&state.data);
             let models = vars
                 .get(name)
                 .map(|v| {
@@ -25,16 +25,18 @@ pub fn process_result(name: &str, state: ActionResult) -> String {
             let mut table = Table::new();
             table.add_row(row!["id", "name", "version", "size", "time"]);
             for m in models {
-                table.add_row(row![                    m.id,
+                table.add_row(row![
+                    m.id,
                     m.name,
                     format!("{}", m.ver),
                     size(m.size),
-                    local_time(m.time)]);
+                    local_time(m.time)
+                ]);
             }
             table.printstd();
         }
         "procs" => {
-            let vars = Vars::from_prost(&state.data.unwrap());
+            let vars = Vars::from_prost(&state.data);
             let procs = vars
                 .get(name)
                 .map(|v| {
@@ -49,17 +51,12 @@ pub fn process_result(name: &str, state: ActionResult) -> String {
             let mut table = Table::new();
             table.add_row(row!["pid", "name", "model id", "state", "start time"]);
             for p in procs {
-                table.add_row(row![
-                    p.id,
-                    p.name,
-                    p.mid,
-                    p.state,
-                    local_time(p.start_time)]);
+                table.add_row(row![p.id, p.name, p.mid, p.state, local_time(p.start_time)]);
             }
             table.printstd();
         }
         "tasks" => {
-            let vars = Vars::from_prost(&state.data.unwrap());
+            let vars = Vars::from_prost(&state.data);
             let tasks = vars
                 .get(name)
                 .map(|v| {
@@ -72,26 +69,111 @@ pub fn process_result(name: &str, state: ActionResult) -> String {
                 })
                 .unwrap();
             let mut table = Table::new();
-            table.add_row(row!["type", "tid", "name", "nid", "state", "start time", "end time"]);
+            table.add_row(row![
+                "type",
+                "tid",
+                "name",
+                "nid",
+                "state",
+                "start time",
+                "end time"
+            ]);
             for p in tasks {
-                table.add_row(row![                    
+                table.add_row(row![
                     p.r#type,
                     p.id,
                     p.name,
-                    p.node_id,
-                    p.action_state,
+                    p.nid,
+                    p.state,
                     local_time(p.start_time),
-                    local_time(p.end_time)]);
+                    local_time(p.end_time)
+                ]);
+            }
+            table.printstd();
+        }
+        "packages" => {
+            let vars = Vars::from_prost(&state.data);
+            let procs = vars
+                .get(name)
+                .map(|v| {
+                    let mut arr: Vec<PackageInfo> = Vec::new();
+                    for info in v.as_array().unwrap() {
+                        arr.push(info.into())
+                    }
+
+                    arr
+                })
+                .unwrap();
+            let mut table = Table::new();
+            table.add_row(row!["id", "name", "size", "create time", "update time"]);
+            for p in procs {
+                table.add_row(row![
+                    p.id,
+                    p.name,
+                    size(p.size),
+                    local_time(p.create_time),
+                    local_time(p.update_time)
+                ]);
+            }
+            table.printstd();
+        }
+        "messages" => {
+            let vars = Vars::from_prost(&state.data);
+            let messages = vars
+                .get(name)
+                .map(|v| {
+                    let mut arr: Vec<MessageInfo> = Vec::new();
+                    for info in v.as_array().unwrap() {
+                        arr.push(info.into())
+                    }
+
+                    arr
+                })
+                .unwrap();
+            let mut table = Table::new();
+            table.add_row(row![
+                "type",
+                "id",
+                // "name",
+                // "pid",
+                "tid",
+                "state",
+                "key",
+                // "tag",
+                "retries",
+                "status",
+                // "inputs",
+                // "outputs",
+                "create time",
+                "update time"
+            ]);
+            for p in messages {
+                table.add_row(row![
+                    p.r#type,
+                    p.id,
+                    // p.name,
+                    // p.pid,
+                    p.tid,
+                    p.state,
+                    p.key,
+                    // p.tag,
+                    p.retry_times,
+                    p.status,
+                    // p.inputs,
+                    // p.outputs,
+                    local_time(p.create_time),
+                    local_time(p.update_time)
+                ]);
             }
             table.printstd();
         }
         "start" | "submit" => {
-            let vars = Vars::from_prost(&state.data.unwrap());
+            let vars = Vars::from_prost(&state.data);
             let pid = vars.get("pid").unwrap();
             result.push_str(&format!("pid={pid}"));
         }
         "model" => {
-            let vars = Vars::from_prost(&state.data.unwrap());
+            let vars = Vars::from_prost(&state.data);
             let model = vars
                 .get(name)
                 .map(|v| {
@@ -99,36 +181,29 @@ pub fn process_result(name: &str, state: ActionResult) -> String {
                     model
                 })
                 .unwrap();
-            result.push_str(&model.model);
+            result.push_str(&model.data);
             result.push_str("\n");
         }
         "proc" => {
-            let vars = Vars::from_prost(&state.data.unwrap()).into_inner();
-            if let Some(proc) = vars.get("proc") {
-                if let Some(map) = proc.as_object() {
-                    for (key, v) in map {
-                        if key == "tasks" {
-                            continue;
-                        }
-                        result.push_str(&format!("{}:{}\n", key, v));
-                    }
-                    result.push_str("tasks:\n");
-                    if let Some(v) = map.get("tasks") {
-                        let text = v.as_str().unwrap();
-                        result.push_str(&format!("{}\n", text));
-                    }
-                }
+            let vars = Vars::from_prost(&state.data).into_inner();
+            if let Some(v) = vars.get(name) {
+                result.push_str(&serde_json::to_string_pretty(v).unwrap());
             }
         }
         "task" => {
-            let vars = Vars::from_prost(&state.data.unwrap()).into_inner();
-            if let Some(proc) = vars.get("task") {
-                if let Some(map) = proc.as_object() {
-                    for (key, v) in map {
-                        result.push_str(&format!("{}:{}\n", key, v));
-                    }
-                }
+            let vars = Vars::from_prost(&state.data).into_inner();
+            if let Some(v) = vars.get(name) {
+                result.push_str(&serde_json::to_string_pretty(v).unwrap());
             }
+        }
+        "message" => {
+            let vars = Vars::from_prost(&state.data);
+            let data = vars
+                .get(name)
+                .map(|v| serde_json::to_string_pretty(v).unwrap())
+                .unwrap();
+            result.push_str(&data);
+            result.push_str("\n");
         }
         _ => {}
     };
