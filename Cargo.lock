@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "acts-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "acts-channel",
  "chrono",
@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "acts-server"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "acts",
  "acts-channel",
