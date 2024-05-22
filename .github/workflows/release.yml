@@ -38,8 +38,19 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
           sh rustup-init.sh -y --default-toolchain none
           rustup target add ${{ matrix.target }}
+      - uses: msys2/setup-msys2@v2
+        if: matrix.rust == 'nightly-x86_64-gnu'
+        with:
+           msystem: MINGW64
+           update: true
+           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+      - name: Put MSYS2_MinGW64 on PATH
+        shell: msys2 {0}
+        run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+        if: matrix.rust == 'nightly-x86_64-gnu'
       - name: Add mingw64 to path for x86_64-gnu
-        run: echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
+        # run: echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
+        run: echo "D:/a/_temp/msys/msys64/mingw64/bin">>$GITHUB_PATH
         if: matrix.rust == 'nightly-x86_64-gnu'
         shell: bash
 
@@ -70,7 +81,7 @@ jobs:
             echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
           fi
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
