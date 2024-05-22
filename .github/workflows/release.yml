@@ -30,7 +30,7 @@ jobs:
             target: x86_64-pc-windows-gnu
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
         # Run build
       - name: install rustup
@@ -41,9 +41,9 @@ jobs:
       - uses: msys2/setup-msys2@v2
         if: matrix.rust == 'nightly-x86_64-gnu'
         with:
-           msystem: MINGW64
-           update: true
-           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+          msystem: MINGW64
+          update: true
+          install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
       - name: Put MSYS2_MinGW64 on PATH
         shell: msys2 {0}
         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
