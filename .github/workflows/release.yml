@@ -54,7 +54,7 @@ jobs:
         if: matrix.rust == 'nightly-x86_64-gnu'
         shell: bash
 
-      - name: Build release binaries
+      - name: Build acts-server
         uses: actions-rs/cargo@v1
         with:
           command: build

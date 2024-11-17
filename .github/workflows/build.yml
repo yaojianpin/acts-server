@@ -10,12 +10,58 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  build-release:
+    name: build-release
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        build: [linux-x86_64, macos-x86_64, windows-x86_64-gnu]
+        include:
+          - build: linux-x86_64
+            os: ubuntu-latest
+            rust: nightly
+            target: x86_64-unknown-linux-gnu
+          - build: macos-x86_64
+            os: macos-latest
+            rust: nightly
+            target: x86_64-apple-darwin
+          - build: windows-x86_64-gnu
+            os: windows-latest
+            rust: nightly-x86_64-gnu
+            target: x86_64-pc-windows-gnu
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build
-        run: cargo build --verbose
-    # - name: Run tests
-    #   run: cargo test --verbose
+
+        # Run build
+      - name: install rustup
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
+          sh rustup-init.sh -y --default-toolchain none
+          rustup target add ${{ matrix.target }}
+
+      - uses: msys2/setup-msys2@v2
+        if: matrix.rust == 'nightly-x86_64-gnu'
+        with:
+          msystem: MINGW64
+          update: true
+          install: git mingw-w64-x86_64-toolchain  mingw-w64-x86_64-gcc mingw-w64-i686-gcc
+      - name: Put MSYS2_MinGW64 on PATH
+        shell: msys2 {0}
+        run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+        if: matrix.rust == 'nightly-x86_64-gnu'
+      - name: Add mingw64 to path for x86_64-gnu
+        run: echo "D:/a/_temp/msys/msys64/mingw64/bin">>$GITHUB_PATH
+        if: matrix.rust == 'nightly-x86_64-gnu'
+        shell: bash
+
+      - name: Build acts-server
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{matrix.target}} --verbose
+
+      - name: build acts-cli
+        shell: bash
+        run: cargo build --release --target ${{matrix.target}} -p acts-cli --verbose
