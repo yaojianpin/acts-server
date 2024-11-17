@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "acts-server"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "acts",
  "acts-channel",

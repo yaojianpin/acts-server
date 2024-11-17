@@ -49,10 +49,19 @@ jobs:
         shell: msys2 {0}
         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
         if: matrix.rust == 'nightly-x86_64-gnu'
-      - name: Add mingw64 to path for x86_64-gnu
-        run: echo "D:/a/_temp/msys/msys64/mingw64/bin">>$GITHUB_PATH
+      - name: Prepare env for windows
         if: matrix.rust == 'nightly-x86_64-gnu'
-        shell: bash
+        run: |
+          # Add symlinks to the target-specific GNU sysroots for Clang
+          New-Item -Path "C:\Program Files\LLVM\x86_64-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\x86_64-w64-mingw32"
+          New-Item -Path "C:\Program Files\LLVM\i686-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\i686-w64-mingw32"
+          # Add paths to GCC executables to PATH
+          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\msys64\mingw32\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # Configure CC_<target> environment variables
+          echo "CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build acts-server
         uses: actions-rs/cargo@v1
