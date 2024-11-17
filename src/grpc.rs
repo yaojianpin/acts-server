@@ -1,29 +1,30 @@
-use acts::{ActError, Builder, ChannelOptions, Engine, Message, Workflow};
-use acts_channel::{
-    acts_service_server::*, ActionOptions, MessageOptions, ProtoJsonValue, Vars, WorkflowMessage,
-    WorkflowModel,
-};
-use futures::Stream;
+use crate::utils;
+use acts::{data::Package, Builder, ChannelOptions, Engine, Workflow};
+use acts_channel::MessageOptions;
+use acts_channel::{acts_service_server::*, Message};
 use std::collections::HashMap;
 use std::{net::SocketAddr, pin::Pin, sync::Arc};
 use tokio::sync::{
     mpsc::{self, Sender},
     Mutex,
 };
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::{transport::Server, Code, Request, Response, Status};
+use tokio_stream::{wrappers::ReceiverStream, Stream};
+use tonic::{transport::Server, Code, Response, Status};
 
-type MessageStream = Pin<Box<dyn Stream<Item = Result<WorkflowMessage, Status>> + Send>>;
+type MessageStream = Pin<Box<dyn Stream<Item = Result<Message, Status>> + Send>>;
 
 macro_rules! wrap_result {
-    ($name:expr, $input: expr) => {
+    ($seq: expr, $name:expr, $input: expr) => {
         match $input {
             Ok(data) => {
-                let mut vars = Vars::new();
-                vars.insert($name, &data.into());
-                Ok(Response::new(vars.prost_vars()))
+                let mut message = utils::wrap_message($name, &data);
+                message.ack = Some($seq.to_string());
+                Ok(Response::new(message))
             }
-            Err(err) => Err(Status::new(Code::Internal, err.to_string())),
+            Err(err) => {
+                println!("wrap_result err= {err:?}");
+                Err(Status::new(Code::Internal, err.to_string()))
+            }
         }
     };
 }
@@ -31,37 +32,21 @@ macro_rules! wrap_result {
 #[derive(Clone)]
 pub struct MessageClient {
     addr: String,
-    sender: Sender<Result<WorkflowMessage, Status>>,
+    sender: Sender<Result<Message, Status>>,
     options: ChannelOptions,
 }
 
 impl MessageClient {
-    fn send(&self, msg: &Message) {
-        let inputs = Vars::from_json(&msg.inputs);
-        let outputs = Vars::from_json(&msg.outputs);
-        let message = WorkflowMessage {
-            id: msg.id.clone(),
-            name: msg.name.clone(),
-            source: msg.source.clone(),
-            r#type: msg.r#type.clone(),
-            model: Some(WorkflowModel {
-                id: msg.model.id.clone(),
-                name: msg.model.name.clone(),
-                tag: msg.model.tag.clone(),
-            }),
-            key: msg.key.clone(),
-            pid: msg.pid.clone(),
-            tid: msg.tid.clone(),
-            state: msg.state.to_string(),
-            tag: msg.tag.clone(),
-            start_time: msg.start_time,
-            end_time: msg.end_time,
-
-            inputs: Some(inputs.prost_vars()),
-            outputs: Some(outputs.prost_vars()),
-        };
-        let msg = Ok(message.clone());
+    fn send(&self, message: Message) {
+        let msg = Ok(message);
         let client = self.clone();
+        if client.sender.is_closed() {
+            println!(
+                "[ERROR] client {}({}) is closed",
+                client.addr, client.options.id
+            );
+            return;
+        }
         tokio::spawn(async move {
             match client.sender.send(msg).await {
                 Ok(_) => {
@@ -95,221 +80,242 @@ impl GrpcServer {
         inst
     }
 
-    fn do_action(&self, name: &str, options: &Vars) -> Result<Response<ProtoJsonValue>, Status> {
-        tracing::info!("do-action  name={name} options={options}");
+    fn do_action(&self, message: Message) -> Result<Response<Message>, Status> {
+        let options =
+            &serde_json::from_slice::<acts::Vars>(&message.data.unwrap_or_default()).unwrap();
+        tracing::info!(
+            "do-action seq={} name={} ack={:?} options={options}",
+            message.seq,
+            message.name,
+            message.ack
+        );
+
+        let name = message.name.as_str();
+        let ack = message.seq.as_str();
         let executor = self.engine.executor();
         match name {
-            "push" => {
+            // do act
+            "act:push" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
-                wrap_result!(name, executor.push(pid, tid, &options.json_vars().into()))
+                wrap_result!(ack, name, executor.act().push(&pid, &tid, options))
             }
-            "remove" => {
+            "act:remove" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
-                    .ok_or(Status::invalid_argument("tid is required"))?;
-
-                wrap_result!(name, executor.remove(pid, tid, &options.json_vars().into()))
-            }
-            "submit" => {
-                let pid = options
-                    .value_str("pid")
-                    .ok_or(Status::invalid_argument("pid is required"))?;
-                let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_result!(name, executor.submit(pid, tid, &options.json_vars().into()))
+                wrap_result!(ack, name, executor.act().remove(&pid, &tid, options))
             }
-            "complete" => {
+            "act:submit" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_result!(
-                    name,
-                    executor.complete(pid, tid, &options.json_vars().into())
-                )
+                wrap_result!(ack, name, executor.act().submit(&pid, &tid, options))
             }
-            "abort" => {
+            "act:complete" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_result!(name, executor.abort(pid, tid, &options.json_vars().into()))
+                wrap_result!(ack, name, executor.act().complete(&pid, &tid, options))
             }
-            "cancel" => {
+            "act:abort" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_result!(name, executor.cancel(pid, tid, &options.json_vars().into()))
+                wrap_result!(ack, name, executor.act().abort(&pid, &tid, options))
             }
-            "back" => {
+            "act:cancel" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_result!(name, executor.back(pid, tid, &options.json_vars().into()))
+                wrap_result!(ack, name, executor.act().cancel(&pid, &tid, options))
             }
-            "skip" => {
+            "act:back" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_result!(name, executor.skip(pid, tid, &options.json_vars().into()))
+                wrap_result!(ack, name, executor.act().back(&pid, &tid, options))
             }
-            "error" => {
+            "act:skip" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
 
-                wrap_result!(name, executor.error(pid, tid, &options.json_vars().into()))
+                wrap_result!(ack, name, executor.act().skip(&pid, &tid, options))
             }
-            "models" => {
-                let count = options.value_number("count").map_or(100, |v| v as usize);
-                let manager = self.engine.manager();
-                let ret = manager.models(count);
-                wrap_result!(name, ret)
+            "act:error" => {
+                let pid = options
+                    .get::<String>("pid")
+                    .ok_or(Status::invalid_argument("pid is required"))?;
+                let tid = options
+                    .get::<String>("tid")
+                    .ok_or(Status::invalid_argument("tid is required"))?;
+
+                wrap_result!(ack, name, executor.act().error(&pid, &tid, options))
             }
-            "rm" => {
-                let target = options
-                    .value_str("name")
-                    .ok_or(Status::invalid_argument("name is required"))?;
+            // model
+            "model:ls" => {
+                let count = options.get::<i64>("count").map_or(100, |v| v as usize);
+                let ret = executor.model().list(count);
+                wrap_result!(ack, name, ret)
+            }
+            "model:rm" => {
                 let id = options
-                    .value_str("id")
+                    .get::<String>("id")
                     .ok_or(Status::invalid_argument("id is required"))?;
-                let manager = self.engine.manager();
-                let ret = match target {
-                    "model" => manager.rm_model(id),
-                    "package" => manager.rm_package(id),
-                    "message" => manager.rm_message(id),
-                    _ => Err(ActError::Runtime(
-                        "the name must be one of 'model', 'package' and 'message'".to_string(),
-                    )),
-                };
-                wrap_result!(name, ret)
+                let ret = executor.model().rm(&id);
+                wrap_result!(ack, name, ret)
             }
-
-            "resend" => {
-                let manager = self.engine.manager();
-                let ret = manager.resend_error_messages();
-                wrap_result!(name, ret)
-            }
-            "model" => {
+            "model:get" => {
                 let mid = options
-                    .value_str("mid")
-                    .ok_or(Status::invalid_argument("mid is required"))?;
-                let fmt = options.value_str("fmt").unwrap_or("text");
-                let manager = self.engine.manager();
-                let ret = manager.model(mid, fmt);
-                wrap_result!(name, ret)
+                    .get::<String>("id")
+                    .ok_or(Status::invalid_argument("id is required"))?;
+                let fmt = options.get::<String>("fmt").unwrap_or("text".to_string());
+                let ret = executor.model().get(&mid, &fmt);
+                wrap_result!(ack, name, ret)
             }
-            "deploy" => {
+            "model:deploy" => {
                 let model_text = options
-                    .value_str("model")
+                    .get::<String>("model")
                     .ok_or(Status::invalid_argument("model is required"))?;
 
                 let mut model =
-                    Workflow::from_yml(model_text).map_err(|err| Status::invalid_argument(err))?;
-                if let Some(mid) = options.value_str("mid") {
-                    model.set_id(mid);
+                    Workflow::from_yml(&model_text).map_err(|err| Status::invalid_argument(err))?;
+                if let Some(mid) = options.get::<String>("mid") {
+                    model.set_id(&mid);
                 };
-                wrap_result!(name, self.engine.manager().deploy(&model))
+                wrap_result!(ack, name, executor.model().deploy(&model))
             }
-            "procs" => {
-                let count = options.value_number("count").map_or(100, |v| v as usize);
-                let manager = self.engine.manager();
-                let ret = manager.procs(count);
-                wrap_result!(name, ret)
+            // package
+            "pack:ls" => {
+                let count = options.get::<i64>("count").map_or(100, |v| v as usize);
+                let ret = executor.pack().list(count);
+                wrap_result!(ack, name, ret)
             }
-            "proc" => {
+            "pack:publish" => {
+                let package_id = options
+                    .get::<String>("id")
+                    .ok_or(Status::invalid_argument("package 'id' is required"))?;
+                let package_name = options.get::<String>("name").unwrap_or_default();
+                let data = options
+                    .get::<String>("body")
+                    .ok_or(Status::invalid_argument("package 'body' is required"))?;
+                let pack = Package {
+                    id: package_id,
+                    name: package_name,
+                    data: data.into_bytes(),
+                    ..Default::default()
+                };
+                wrap_result!(ack, name, executor.pack().publish(&pack))
+            }
+            "pack:rm" => {
+                let id = options
+                    .get::<String>("id")
+                    .ok_or(Status::invalid_argument("id is required"))?;
+                let ret = executor.pack().rm(&id);
+                wrap_result!(ack, name, ret)
+            }
+            // proc
+            "proc:start" => {
+                let id = options
+                    .get::<String>("id")
+                    .ok_or(Status::invalid_argument("id is required"))?;
+                wrap_result!(ack, name, executor.proc().start(&id, options))
+            }
+            "proc:ls" => {
+                let count = options.get::<i64>("count").map_or(100, |v| v as usize);
+                let ret = executor.proc().list(count);
+                wrap_result!(ack, name, ret)
+            }
+            "proc:get" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
-                let manager = self.engine.manager();
-                let ret = manager.proc(pid);
-                wrap_result!(name, ret)
+                let ret = executor.proc().get(&pid);
+                wrap_result!(ack, name, ret)
             }
-            "tasks" => {
+            // task
+            "task:ls" => {
                 let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
-                let count = options.value_number("count").map_or(100, |v| v as usize);
-                let manager = self.engine.manager();
-                let ret = manager.tasks(pid, count);
-                wrap_result!(name, ret)
+                let count = options.get::<i64>("count").map_or(100, |v| v as usize);
+                let ret = executor.task().list(&pid, count);
+                wrap_result!(ack, name, ret)
             }
-            "packages" => {
-                let count = options.value_number("count").map_or(100, |v| v as usize);
-                let manager = self.engine.manager();
-                let ret = manager.packages(count);
-                wrap_result!(name, ret)
-            }
-            "messages" => {
+            "task:get" => {
                 let pid = options
-                    .value_str("pid")
-                    .ok_or(Status::invalid_argument("pid is required"))?;
-                let count = options.value_number("count").map_or(100, |v| v as usize);
-                let manager = self.engine.manager();
-                let ret = manager.messages(pid, count);
-                wrap_result!(name, ret)
-            }
-            "task" => {
-                let pid = options
-                    .value_str("pid")
+                    .get::<String>("pid")
                     .ok_or(Status::invalid_argument("pid is required"))?;
                 let tid = options
-                    .value_str("tid")
+                    .get::<String>("tid")
                     .ok_or(Status::invalid_argument("tid is required"))?;
-                let manager = self.engine.manager();
-                let ret = manager.task(pid, tid);
-                wrap_result!(name, ret)
+                let ret = executor.task().get(&pid, &tid);
+                wrap_result!(ack, name, ret)
             }
-            "message" => {
+            // msg
+            "msg:ls" => {
+                let pid = options
+                    .get::<String>("pid")
+                    .ok_or(Status::invalid_argument("pid is required"))?;
+                let count = options.get::<i64>("count").map_or(100, |v| v as usize);
+                let ret = executor.msg().list(&pid, count);
+                wrap_result!(ack, name, ret)
+            }
+            "msg:get" => {
                 let id = options
-                    .value_str("id")
+                    .get::<String>("id")
                     .ok_or(Status::invalid_argument("id is required"))?;
-                let manager = self.engine.manager();
-                let ret = manager.message(id);
-                wrap_result!(name, ret)
+                let ret = executor.msg().get(&id);
+                wrap_result!(ack, name, ret)
             }
-            "start" => {
-                let mid = options
-                    .value_str("mid")
-                    .ok_or(Status::invalid_argument("mid is required"))?;
-                wrap_result!(name, executor.start(mid, &options.json_vars().into()))
-            }
-            "ack" => {
+            "msg:ack" => {
                 let id = options
-                    .value_str("id")
+                    .get::<String>("id")
                     .ok_or(Status::invalid_argument("id is required"))?;
-                wrap_result!(name, executor.ack(id))
+                wrap_result!(ack, name, executor.msg().ack(&id))
+            }
+            "msg:redo" => {
+                let ret = executor.msg().redo();
+                wrap_result!(ack, name, ret)
+            }
+            "msg:rm" => {
+                let id = options
+                    .get::<String>("id")
+                    .ok_or(Status::invalid_argument("id is required"))?;
+                let ret = executor.msg().rm(&id);
+                wrap_result!(ack, name, ret)
             }
             _ => Err(Status::not_found(format!("not found action '{name}'"))),
         }
@@ -321,7 +327,9 @@ impl GrpcServer {
             let chan = self.engine.channel_with_options(&client.options);
             let c = client.clone();
             chan.on_message(move |e| {
-                c.send(e);
+                let m: &acts::Message = e;
+                let message = utils::wrap_message(&m.name, m);
+                c.send(message);
             });
         }
     }
@@ -333,18 +341,15 @@ impl ActsService for GrpcServer {
 
     async fn on_message(
         &self,
-        req: Request<MessageOptions>,
-    ) -> Result<Response<Self::OnMessageStream>, Status> {
-        let (tx, rx) = mpsc::channel::<Result<WorkflowMessage, Status>>(128);
+        req: tonic::Request<MessageOptions>,
+    ) -> Result<tonic::Response<Self::OnMessageStream>, tonic::Status> {
+        let (tx, rx) = mpsc::channel::<Result<Message, Status>>(128);
         let mut clients = self.clients.lock().await;
 
         let addr = req.remote_addr().unwrap();
         let options = req.into_inner();
 
         tracing::info!("on_message: options={:?}", options);
-        if clients.contains_key(&options.client_id) {
-            clients.remove(&options.client_id);
-        }
         let client = MessageClient {
             addr: addr.to_string(),
             sender: tx,
@@ -363,26 +368,25 @@ impl ActsService for GrpcServer {
             .or_insert(client.clone());
 
         let chan = self.engine.channel_with_options(&client.options);
-        let c = client.clone();
         chan.on_message(move |e| {
-            c.send(e);
+            let message = Message {
+                name: e.name.clone(),
+                seq: e.id.clone(),
+                ack: None,
+                data: Some(serde_json::to_vec(e.inner()).unwrap()),
+            };
+            client.send(message);
         });
 
-        let out_stream = ReceiverStream::new(rx);
-        Ok(Response::new(Box::pin(out_stream) as Self::OnMessageStream))
+        let chan_stream = ReceiverStream::new(rx);
+        Ok(Response::new(Box::pin(chan_stream) as Self::OnMessageStream))
     }
 
-    async fn action(
+    async fn send(
         &self,
-        req: Request<ActionOptions>,
-    ) -> Result<Response<ProtoJsonValue>, Status> {
-        let cmd = req.into_inner();
-        let name = cmd.name;
-        let vars = Vars::from_prost(
-            &cmd.options
-                .ok_or(Status::invalid_argument("{name} <options> is required"))?,
-        );
-        self.do_action(&name, &vars)
+        request: tonic::Request<Message>,
+    ) -> Result<tonic::Response<Message>, tonic::Status> {
+        self.do_action(request.into_inner())
     }
 }
 

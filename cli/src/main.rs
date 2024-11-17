@@ -1,13 +1,12 @@
 mod cli;
 mod client;
 mod cmd;
-mod help;
 mod util;
 
 use clap::Parser;
 use cli::Cli;
-use cmd::Command;
-use std::io::{self, Write};
+use cmd::CommandRunner;
+use std::io::Write;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -16,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut port: u16 = 10080;
     let mut hostname = "127.0.0.1";
 
-    if let Some(h) = &cli.hostname {
+    if let Some(h) = &cli.host {
         hostname = h;
     }
 
@@ -25,38 +24,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let uri = format!("http://{hostname}:{port}");
-    let tip = format!("{}:{}> ", hostname, port);
+    let tip = format!("{}:{} $ ", hostname, port);
     let mut client = client::connect(&uri).await?;
-    let mut cmd = Command::new(&mut client);
-
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let mut stderr = io::stderr();
+    let mut cmd = CommandRunner::new(&mut client);
+    show_help_tip();
     loop {
-        print!("{}", tip);
-        io::stdout().flush().unwrap();
-
-        let mut input = String::new();
-        stdin.read_line(&mut input).expect("Failed to read command");
-
-        let commands: Vec<&str> = input.split_whitespace().collect();
-        if commands.len() == 0 {
+        let line = readline(&tip)?;
+        let line = line.trim();
+        if line.is_empty() {
             continue;
         }
-        let command: &str = &commands[0].to_lowercase();
-        let args = &commands[1..];
-        match cmd.send(&command, args).await {
-            Ok(value) => {
-                for line in value.lines() {
-                    writeln!(stdout, "{}", line).unwrap();
+
+        match cmd.run(line).await {
+            Ok(quit) => {
+                if quit {
+                    break;
                 }
             }
             Err(err) => {
-                let message = err.message();
-                for line in message.lines() {
-                    writeln!(stderr, "{}", line).unwrap();
-                }
+                // let style = clap_cargo::style::HEADER;
+                writeln!(std::io::stderr(), "{}", err).map_err(|e| e.to_string())?;
             }
-        };
+        }
     }
+
+    Ok(())
+}
+
+fn readline(tip: &str) -> Result<String, String> {
+    write!(std::io::stdout(), "{tip}").map_err(|e| e.to_string())?;
+    std::io::stdout().flush().map_err(|e| e.to_string())?;
+    let mut buffer = String::new();
+    std::io::stdin()
+        .read_line(&mut buffer)
+        .map_err(|e| e.to_string())?;
+    Ok(buffer)
+}
+
+fn show_help_tip() {
+    let text = "tap 'help' to list available subcommands and some concept guides";
+    writeln!(std::io::stdout(), "{text}").unwrap();
 }

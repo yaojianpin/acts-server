@@ -5,6 +5,7 @@ mod config;
 mod grpc;
 #[cfg(test)]
 mod tests;
+mod utils;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
