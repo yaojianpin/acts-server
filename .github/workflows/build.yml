@@ -41,20 +41,12 @@ jobs:
           sh rustup-init.sh -y --default-toolchain none
           rustup target add ${{ matrix.target }}
 
-      - uses: msys2/setup-msys2@v2
+      - name: Setup msys2 toolchains
         if: matrix.rust == 'nightly-x86_64-gnu'
+        uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
-          update: true
-          install: git mingw-w64-x86_64-toolchain  mingw-w64-x86_64-gcc mingw-w64-i686-gcc
-      - name: Put MSYS2_MinGW64 on PATH
-        shell: msys2 {0}
-        run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
-        if: matrix.rust == 'nightly-x86_64-gnu'
-      # - name: Add mingw64 to path for x86_64-gnu
-      #   run: echo "D:/a/_temp/msys/msys64/mingw64/bin">>$GITHUB_PATH
-      #   if: matrix.rust == 'nightly-x86_64-gnu'
-      #   shell: bash
+          release: false
+          install: mingw-w64-x86_64-gcc mingw-w64-i686-gcc
 
       - name: Prepare env for windows
         if: matrix.rust == 'nightly-x86_64-gnu'
