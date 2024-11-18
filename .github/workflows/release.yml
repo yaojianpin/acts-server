@@ -32,33 +32,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-        # Run build
-      # - name: install rustup
-      #   run: |
-      #     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
-      #     sh rustup-init.sh -y --default-toolchain none
-      #     rustup target add ${{ matrix.target }}
-
       - name: Setup msys2 toolchains
-        if: matrix.rust == 'nightly-x86_64-gnu'
+        if: matrix.build == 'windows-x86_64-gnu'
         uses: msys2/setup-msys2@v2
         with:
           release: false
           install: mingw-w64-x86_64-gcc mingw-w64-i686-gcc
 
       - name: Prepare env for windows
-        if: matrix.rust == 'nightly-x86_64-gnu'
+        if: matrix.build == 'windows-x86_64-gnu'
         run: |
           # Add symlinks to the target-specific GNU sysroots for Clang
           New-Item -Path "C:\Program Files\LLVM\x86_64-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\x86_64-w64-mingw32"
-          New-Item -Path "C:\Program Files\LLVM\i686-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\i686-w64-mingw32"
           # Add paths to GCC executables to PATH
           echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "C:\msys64\mingw32\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           # Configure CC_<target> environment variables
           echo "CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-          echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-          # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
