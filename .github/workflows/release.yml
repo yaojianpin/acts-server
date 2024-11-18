@@ -75,11 +75,13 @@ jobs:
           mkdir -p "$staging"
           cp {README.md,LICENSE,acts.conf} "$staging/"
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            ls target/${{matrix.target}}/release
             cp target/${{matrix.target}}/release/acts-server.exe "$staging/"
             cp target/${{matrix.target}}/release/acts-cli.exe "$staging/"
             7z a "$staging.zip" "$staging"
             echo "ASSET=$staging.zip" >> $GITHUB_ENV
           else
+            ls target/${{matrix.target}}/release
             cp target/${{matrix.target}}/release/acts-server "$staging/"
             cp target/${{matrix.target}}/release/acts-cli "$staging/"
             tar czf "$staging.tar.gz" "$staging"
