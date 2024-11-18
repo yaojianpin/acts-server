@@ -46,7 +46,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           release: false
-          install: mingw-w64-x86_64-gcc
+          install: git mingw-w64-x86_64-gcc
 
       - name: Prepare env for windows
         if: matrix.build == 'windows-x86_64-gnu'
