@@ -20,26 +20,26 @@ jobs:
         include:
           - build: linux-x86_64
             os: ubuntu-latest
-            rust: nightly
+            rust: stable
             target: x86_64-unknown-linux-gnu
           - build: macos-x86_64
             os: macos-latest
-            rust: nightly
+            rust: stable
             target: x86_64-apple-darwin
           - build: windows-x86_64-gnu
             os: windows-latest
-            rust: nightly-x86_64-gnu
+            rust: stable
             target: x86_64-pc-windows-gnu
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
         # Run build
-      - name: install rustup
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
-          sh rustup-init.sh -y --default-toolchain none
-          rustup target add ${{ matrix.target }}
+      # - name: install rustup
+      #   run: |
+      #     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
+      #     sh rustup-init.sh -y --default-toolchain none
+      #     rustup target add ${{ matrix.target }}
 
       - name: Setup msys2 toolchains
         if: matrix.rust == 'nightly-x86_64-gnu'
@@ -62,6 +62,13 @@ jobs:
           echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          targets: ${{ matrix.target }}
+          components: rustfmt
+
       - name: Build acts-server
         uses: actions-rs/cargo@v1
         with:
@@ -71,3 +78,21 @@ jobs:
       - name: build acts-cli
         shell: bash
         run: cargo build --release --target ${{matrix.target}} -p acts-cli --verbose
+
+      - name: Build archive
+        shell: bash
+        run: |
+          staging="${{ matrix.build }}"
+          mkdir -p "$staging"
+          cp {README.md,LICENSE,acts.conf} "$staging/"
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/${{matrix.target}}/release/acts-server.exe "$staging/"
+            cp target/${{matrix.target}}/release/acts-cli.exe "$staging/"
+            7z a "$staging.zip" "$staging"
+            echo "ASSET=$staging.zip" >> $GITHUB_ENV
+          else
+            cp target/${{matrix.target}}/release/acts-server "$staging/"
+            cp target/${{matrix.target}}/release/acts-cli "$staging/"
+            tar czf "$staging.tar.gz" "$staging"
+            echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
+          fi

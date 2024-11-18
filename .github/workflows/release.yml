@@ -39,13 +39,6 @@ jobs:
       #     sh rustup-init.sh -y --default-toolchain none
       #     rustup target add ${{ matrix.target }}
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          targets: ${{ matrix.target }}
-          components: rustfmt
-
       - name: Setup msys2 toolchains
         if: matrix.rust == 'nightly-x86_64-gnu'
         uses: msys2/setup-msys2@v2
@@ -66,6 +59,13 @@ jobs:
           echo "CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          targets: ${{ matrix.target }}
+          components: rustfmt
 
       - name: build acts-server
         shell: bash
