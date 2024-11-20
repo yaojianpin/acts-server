@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "acts"
-version = "0.12.3"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e192b4a26f2f4be36b7350de523e07e0fc6e6fa169f2ab066ca7f6f5b7a5902"
+checksum = "95516e0b20f81fa003adf4e82dab97c015da4fb42a688195497dd7178a524fd6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -35,9 +35,9 @@ dependencies = [
 
 [[package]]
 name = "acts-channel"
-version = "0.6.1"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a010e2ae61bc438bf4d6d9a90089e751e2c7bdcedcc55b246abec71690e706d9"
+checksum = "1fffde7363ada7717514bbff91dc21de41c4b4f77d897baf6cf77d31bef475f9"
 dependencies = [
  "chrono",
  "futures",
@@ -62,8 +62,10 @@ dependencies = [
  "acts-channel",
  "chrono",
  "clap 4.5.21",
+ "clap-cargo",
  "futures",
  "once_cell",
+ "owo-colors",
  "prettytable-rs",
  "serde",
  "serde_json",
@@ -75,7 +77,7 @@ dependencies = [
 
 [[package]]
 name = "acts-server"
-version = "0.6.3"
+version = "0.6.1"
 dependencies = [
  "acts",
  "acts-channel",
@@ -458,6 +460,16 @@ checksum = "fb3b4b9e5a7c7514dfa52869339ee98b3156b0bfb4e8a77c4ff4babb64b1604f"
 dependencies = [
  "clap_builder",
  "clap_derive",
+]
+
+[[package]]
+name = "clap-cargo"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b2ea69cefa96b848b73ad516ad1d59a195cdf9263087d977f648a818c8b43e"
+dependencies = [
+ "anstyle",
+ "clap 4.5.21",
 ]
 
 [[package]]
@@ -1495,6 +1507,12 @@ name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
+
+[[package]]
+name = "owo-colors"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb37767f6569cd834a413442455e0f066d0d522de8630436e2a1761d9726ba56"
 
 [[package]]
 name = "parking_lot"

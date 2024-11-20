@@ -71,7 +71,7 @@ async fn deploy(parent: &mut Command<'_>, path: &PathBuf) -> Result<String, Stri
 }
 
 async fn ls(parent: &mut Command<'_>, count: &Option<u32>) -> Result<String, String> {
-    let mut result = String::new();
+    let mut ret = String::new();
     let mut options = Vars::new();
     if let Some(count) = count {
         options.set("count", count);
@@ -95,13 +95,14 @@ async fn ls(parent: &mut Command<'_>, count: &Option<u32>) -> Result<String, Str
             util::local_time(m.time)
         ]);
     }
+
     table.printstd();
 
     // print the elapsed
     let cost = resp.end_time - resp.start_time;
-    result.push_str(&format!("(elapsed {cost}ms)"));
+    ret.push_str(&format!("(elapsed {cost}ms)"));
 
-    Ok(result)
+    Ok(ret)
 }
 
 async fn get(parent: &mut Command<'_>, id: &str, fmt: &Option<String>) -> Result<String, String> {

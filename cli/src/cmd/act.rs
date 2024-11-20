@@ -1,5 +1,5 @@
 use super::CommandRunner as Command;
-use acts_channel::{ActsOptions, Vars};
+use acts_channel::Vars;
 use clap::{Args, Subcommand};
 
 #[derive(Debug, Args)]
@@ -89,37 +89,6 @@ pub enum ActCommands {
         #[arg(help = "task id")]
         tid: String,
     },
-    #[command(about = "subscribe server messages")]
-    Sub {
-        #[arg(help = "client id")]
-        client_id: String,
-        #[arg(
-            short,
-            long,
-            help = "message type in glob pattern, the type includes workflow, step, branch and act"
-        )]
-        r#type: Option<String>,
-        #[arg(
-            short,
-            long,
-            help = "message type in glob pattern, the state includes created, completed, error, cancelled, aborted, skipped and backed"
-        )]
-        state: Option<String>,
-        #[arg(
-            long,
-            help = "glob pattern for message tag which is defined in workflow tag attribute"
-        )]
-        tag: Option<String>,
-        #[arg(short, long, help = "message key in glob pattern")]
-        key: Option<String>,
-        #[arg(
-            short,
-            long,
-            default_value_t = true,
-            help = "auto ack message by client, if false you should ack message from you app"
-        )]
-        ack: bool,
-    },
 }
 
 pub async fn process(parent: &mut Command<'_>, command: &ActCommands) -> Result<(), String> {
@@ -160,14 +129,6 @@ pub async fn process(parent: &mut Command<'_>, command: &ActCommands) -> Result<
         ActCommands::Remove { pid, tid } => {
             send(parent, "act:remove", pid, tid, parent.vars.clone()).await
         }
-        ActCommands::Sub {
-            client_id,
-            r#type,
-            state,
-            key,
-            tag,
-            ack,
-        } => sub(parent, &client_id, r#type, state, key, tag, ack).await,
     }?;
 
     parent.output(&ret);
@@ -192,43 +153,6 @@ async fn send(
     // print the elapsed
     let cost = resp.end_time - resp.start_time;
     ret.push_str(&format!("(elapsed {cost}ms)"));
-
-    Ok(ret)
-}
-
-async fn sub(
-    parent: &mut Command<'_>,
-    client_id: &str,
-    r#type: &Option<String>,
-    state: &Option<String>,
-    tag: &Option<String>,
-    key: &Option<String>,
-    ack: &bool,
-) -> Result<String, String> {
-    let ret = String::new();
-
-    let default_value = "*".to_string();
-    // * means to sub all messages
-    let r#type = r#type.as_ref().unwrap_or(&default_value);
-    let state = state.as_ref().unwrap_or(&default_value);
-    let tag = tag.as_ref().unwrap_or(&default_value);
-    let key = key.as_ref().unwrap_or(&default_value);
-    parent
-        .client
-        .subscribe(
-            client_id,
-            |m| {
-                println!("[message]: {}", serde_json::to_string(&m).unwrap());
-            },
-            &ActsOptions {
-                r#type: Some(r#type.to_string()),
-                state: Some(state.to_string()),
-                tag: Some(tag.to_string()),
-                key: Some(key.to_string()),
-                ack: Some(ack.clone()),
-            },
-        )
-        .await;
 
     Ok(ret)
 }

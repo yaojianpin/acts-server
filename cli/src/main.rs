@@ -6,6 +6,7 @@ mod util;
 use clap::Parser;
 use cli::Cli;
 use cmd::CommandRunner;
+use owo_colors::OwoColorize;
 use std::io::Write;
 
 #[tokio::main]
@@ -42,8 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Err(err) => {
-                // let style = clap_cargo::style::HEADER;
-                writeln!(std::io::stderr(), "{}", err).map_err(|e| e.to_string())?;
+                writeln!(std::io::stderr(), "{}", err.red()).map_err(|e| e.to_string())?;
             }
         }
     }

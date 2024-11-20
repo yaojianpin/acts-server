@@ -2,12 +2,8 @@ use crate::utils;
 use acts::{data::Package, Builder, ChannelOptions, Engine, Workflow};
 use acts_channel::MessageOptions;
 use acts_channel::{acts_service_server::*, Message};
-use std::collections::HashMap;
 use std::{net::SocketAddr, pin::Pin, sync::Arc};
-use tokio::sync::{
-    mpsc::{self, Sender},
-    Mutex,
-};
+use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::{wrappers::ReceiverStream, Stream};
 use tonic::{transport::Server, Code, Response, Status};
 
@@ -67,22 +63,22 @@ impl MessageClient {
 #[derive(Clone)]
 pub struct GrpcServer {
     engine: Arc<Engine>,
-    clients: Arc<Mutex<HashMap<String, MessageClient>>>,
 }
 
 impl GrpcServer {
     pub fn new(engine: &Arc<Engine>) -> Self {
         let inst = Self {
             engine: engine.clone(),
-            clients: Arc::new(Mutex::new(HashMap::new())),
         };
 
         inst
     }
 
     fn do_action(&self, message: Message) -> Result<Response<Message>, Status> {
-        let options =
-            &serde_json::from_slice::<acts::Vars>(&message.data.unwrap_or_default()).unwrap();
+        let options = match message.data {
+            Some(data) => &serde_json::from_slice::<acts::Vars>(&data).unwrap(),
+            None => &acts::Vars::new(),
+        };
         tracing::info!(
             "do-action seq={} name={} ack={:?} options={options}",
             message.seq,
@@ -317,22 +313,18 @@ impl GrpcServer {
                 let ret = executor.msg().rm(&id);
                 wrap_result!(ack, name, ret)
             }
+            "msg:unsub" => {
+                let client_id = options
+                    .get::<String>("client_id")
+                    .ok_or(Status::invalid_argument("client id is required"))?;
+                let ret = executor.msg().unsub(&client_id);
+                wrap_result!(ack, name, ret)
+            }
             _ => Err(Status::not_found(format!("not found action '{name}'"))),
         }
     }
 
-    pub async fn init(&self) {
-        let clients = self.clients.lock().await;
-        for (_, client) in clients.iter() {
-            let chan = self.engine.channel_with_options(&client.options);
-            let c = client.clone();
-            chan.on_message(move |e| {
-                let m: &acts::Message = e;
-                let message = utils::wrap_message(&m.name, m);
-                c.send(message);
-            });
-        }
-    }
+    pub async fn init(&self) {}
 }
 
 #[tonic::async_trait]
@@ -344,8 +336,6 @@ impl ActsService for GrpcServer {
         req: tonic::Request<MessageOptions>,
     ) -> Result<tonic::Response<Self::OnMessageStream>, tonic::Status> {
         let (tx, rx) = mpsc::channel::<Result<Message, Status>>(128);
-        let mut clients = self.clients.lock().await;
-
         let addr = req.remote_addr().unwrap();
         let options = req.into_inner();
 
@@ -362,24 +352,21 @@ impl ActsService for GrpcServer {
                 id: options.client_id.clone(),
             },
         };
-        clients
-            .entry(options.client_id)
-            .and_modify(|entry| *entry = client.clone())
-            .or_insert(client.clone());
-
         let chan = self.engine.channel_with_options(&client.options);
-        chan.on_message(move |e| {
-            let message = Message {
-                name: e.name.clone(),
-                seq: e.id.clone(),
-                ack: None,
-                data: Some(serde_json::to_vec(e.inner()).unwrap()),
-            };
-            client.send(message);
+        tokio::spawn(async move {
+            chan.on_message(move |e| {
+                let message = Message {
+                    name: e.name.clone(),
+                    seq: e.id.clone(),
+                    ack: None,
+                    data: Some(serde_json::to_vec(e.inner()).unwrap()),
+                };
+                client.send(message);
+            });
         });
 
-        let chan_stream = ReceiverStream::new(rx);
-        Ok(Response::new(Box::pin(chan_stream) as Self::OnMessageStream))
+        let chan_stream = Box::pin(ReceiverStream::new(rx));
+        Ok(Response::new(chan_stream))
     }
 
     async fn send(
