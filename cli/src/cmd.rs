@@ -8,7 +8,7 @@ mod vars;
 
 use act::ActArgs;
 use acts_channel::{self, ActsChannel, Vars};
-use clap::{command, ColorChoice, Parser, Subcommand};
+use clap::{command, Parser, Subcommand};
 use model::ModelArgs;
 use msg::MessageArgs;
 use owo_colors::OwoColorize;
@@ -18,18 +18,9 @@ use std::io::Write;
 use task::TaskArgs;
 use vars::VarsArgs;
 
-pub const CLAP_STYLING: clap::builder::styling::Styles = clap::builder::styling::Styles::styled()
-    .header(clap_cargo::style::HEADER)
-    .usage(clap_cargo::style::USAGE)
-    .literal(clap_cargo::style::LITERAL)
-    .placeholder(clap_cargo::style::PLACEHOLDER)
-    .error(clap_cargo::style::ERROR)
-    .valid(clap_cargo::style::VALID)
-    .invalid(clap_cargo::style::INVALID);
-
 #[derive(Debug, Parser)]
 #[command(name = "act")]
-#[command(multicall = true, color=ColorChoice::Always, styles=CLAP_STYLING)]
+#[command(multicall = true, styles=crate::util::CLAP_STYLING)]
 pub struct ActsRootCommand {
     #[command(subcommand)]
     pub command: Commands,
@@ -70,7 +61,10 @@ impl<'a> CommandRunner<'a> {
 
     pub async fn run(&mut self, line: &str) -> Result<bool, String> {
         let args = shlex::split(line).ok_or("error: Invalid input")?;
-        let cli = ActsRootCommand::try_parse_from(args).map_err(|e| e.to_string())?;
+        let cli = ActsRootCommand::try_parse_from(args).map_err(|e| {
+            e.print().unwrap();
+            "".to_string()
+        })?;
         let command = cli.command;
         match command {
             Commands::Exit => {

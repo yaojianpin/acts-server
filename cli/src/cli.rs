@@ -2,7 +2,7 @@ use clap::{arg, command, Parser};
 
 #[derive(Parser, Debug)]
 #[command(name = "acts-cli")]
-#[command(about = "cli for acts-server", long_about = None)]
+#[command(about = "cli for acts-server", long_about = None, styles=crate::util::CLAP_STYLING)]
 pub struct Cli {
     #[arg(long)]
     pub host: Option<String>,
