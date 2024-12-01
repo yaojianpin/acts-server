@@ -1,7 +1,7 @@
 use super::CommandRunner as Command;
 use crate::util;
 use acts_channel::{
-    model::{Package, PackageInfo},
+    model::{Package, PackageInfo, PageData},
     Vars,
 };
 use clap::{Args, Subcommand};
@@ -41,8 +41,14 @@ body: |
     },
     #[command(about = "list all packages")]
     Ls {
+        #[arg(short, long, help = "skip the offset number to begin count")]
+        offset: Option<u32>,
         #[arg(short, long, help = "expect to load the max count")]
         count: Option<u32>,
+        #[arg(short='Q', long, help = "query by keys. \nexample: -Q id=123", value_parser = util::parse_key_value)]
+        query_by: Vec<(String, String)>,
+        #[arg(short='O', long, help = "order by keys. \nexample: -O start_time -O update_time,desc", value_parser = util::parse_sort)]
+        order_by: Vec<(String, bool)>,
     },
     #[command(about = "remove a package by id")]
     Rm {
@@ -54,7 +60,12 @@ body: |
 pub async fn process(parent: &mut Command<'_>, command: &PacakgeCommands) -> Result<(), String> {
     let ret = match command {
         PacakgeCommands::Get { id } => get(parent, id).await,
-        PacakgeCommands::Ls { count } => ls(parent, count).await,
+        PacakgeCommands::Ls {
+            offset,
+            count,
+            query_by,
+            order_by,
+        } => ls(parent, offset, count, query_by, order_by).await,
         PacakgeCommands::Rm { id } => rm(parent, id).await,
         PacakgeCommands::Publish { path } => publish(parent, path).await,
     }?;
@@ -104,22 +115,33 @@ pub async fn get(parent: &mut Command<'_>, id: &str) -> Result<String, String> {
     Ok(ret)
 }
 
-pub async fn ls(parent: &mut Command<'_>, count: &Option<u32>) -> Result<String, String> {
+pub async fn ls(
+    parent: &mut Command<'_>,
+    offset: &Option<u32>,
+    count: &Option<u32>,
+    query_by: &Vec<(String, String)>,
+    order_by: &Vec<(String, bool)>,
+) -> Result<String, String> {
     let mut ret = String::new();
     let mut options = Vars::new();
+    options.set("query_by", query_by);
+    options.set("order_by", order_by);
+    if let Some(offset) = offset {
+        options.set("offset", offset);
+    };
     if let Some(count) = count {
         options.set("count", count);
     };
     let resp = parent
         .client
-        .send::<Vec<PackageInfo>>("pack:ls", options)
+        .send::<PageData<PackageInfo>>("pack:ls", options)
         .await
         .map_err(|err| err.message().to_string())?;
 
-    let procs = resp.data.unwrap();
+    let data = resp.data.as_ref().unwrap();
     let mut table = Table::new();
     table.add_row(row!["id", "name", "size", "create time", "update time"]);
-    for p in procs {
+    for p in &data.rows {
         table.add_row(row![
             p.id,
             p.name,
@@ -129,9 +151,8 @@ pub async fn ls(parent: &mut Command<'_>, count: &Option<u32>) -> Result<String,
         ]);
     }
     table.printstd();
-
-    let cost = resp.end_time - resp.start_time;
-    ret.push_str(&format!("(elapsed {cost}ms)"));
+    util::print_pager(&mut ret, &data);
+    util::print_cost(&mut ret, &resp);
 
     Ok(ret)
 }

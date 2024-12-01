@@ -4,7 +4,7 @@ mod msg;
 mod pack;
 mod proc;
 mod task;
-mod vars;
+// mod vars;
 
 use act::ActArgs;
 use acts_channel::{self, ActsChannel, Vars};
@@ -16,7 +16,7 @@ use pack::PacakgeArgs;
 use proc::ProcArgs;
 use std::io::Write;
 use task::TaskArgs;
-use vars::VarsArgs;
+// use vars::VarsArgs;
 
 #[derive(Debug, Parser)]
 #[command(name = "act")]
@@ -28,8 +28,8 @@ pub struct ActsRootCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    #[command(about = "set options for command arguments")]
-    Vars(VarsArgs),
+    // #[command(about = "set options for command arguments")]
+    // Vars(VarsArgs),
     #[command(about = "execute model commands")]
     Model(ModelArgs),
     #[command(about = "execute package commands")]
@@ -70,9 +70,9 @@ impl<'a> CommandRunner<'a> {
             Commands::Exit => {
                 return Ok(true);
             }
-            Commands::Vars(args) => {
-                vars::process(self, &args.command).await?;
-            }
+            // Commands::Vars(args) => {
+            //     vars::process(self, &args.command).await?;
+            // }
             Commands::Model(args) => {
                 model::process(self, &args.command).await?;
             }

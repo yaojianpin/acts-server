@@ -1,4 +1,5 @@
 use crate::utils;
+use acts::ExecutorQuery;
 use acts::{data::Package, Builder, ChannelOptions, Engine, Workflow};
 use acts_channel::MessageOptions;
 use acts_channel::{acts_service_server::*, Message};
@@ -182,8 +183,22 @@ impl GrpcServer {
             }
             // model
             "model:ls" => {
+                let offset = options.get::<i64>("offset").map_or(0, |v| v as usize);
                 let count = options.get::<i64>("count").map_or(100, |v| v as usize);
-                let ret = executor.model().list(count);
+                let query_by = options
+                    .get::<Vec<(String, String)>>("query_by")
+                    .unwrap_or_default();
+                let order_by = options
+                    .get::<Vec<(String, bool)>>("order_by")
+                    .unwrap_or_default();
+                let query = ExecutorQuery {
+                    offset,
+                    count,
+                    query_by,
+                    order_by,
+                    ..Default::default()
+                };
+                let ret = executor.model().list(&query);
                 wrap_result!(ack, name, ret)
             }
             "model:rm" => {
@@ -215,8 +230,22 @@ impl GrpcServer {
             }
             // package
             "pack:ls" => {
+                let offset = options.get::<i64>("offset").map_or(0, |v| v as usize);
                 let count = options.get::<i64>("count").map_or(100, |v| v as usize);
-                let ret = executor.pack().list(count);
+                let query_by = options
+                    .get::<Vec<(String, String)>>("query_by")
+                    .unwrap_or_default();
+                let order_by = options
+                    .get::<Vec<(String, bool)>>("order_by")
+                    .unwrap_or_default();
+                let query = ExecutorQuery {
+                    offset,
+                    count,
+                    query_by,
+                    order_by,
+                    ..Default::default()
+                };
+                let ret = executor.pack().list(&query);
                 wrap_result!(ack, name, ret)
             }
             "pack:publish" => {
@@ -250,8 +279,25 @@ impl GrpcServer {
                 wrap_result!(ack, name, executor.proc().start(&id, options))
             }
             "proc:ls" => {
+                let offset = options.get::<i64>("offset").map_or(0, |v| v as usize);
                 let count = options.get::<i64>("count").map_or(100, |v| v as usize);
-                let ret = executor.proc().list(count);
+                let query_by = options
+                    .get::<Vec<(String, String)>>("query_by")
+                    .unwrap_or_default();
+                let order_by = options
+                    .get::<Vec<(String, bool)>>("order_by")
+                    .unwrap_or_default();
+                let query = ExecutorQuery {
+                    offset,
+                    count,
+                    query_by,
+                    order_by,
+                    ..Default::default()
+                }
+                .with_offset(offset)
+                .with_count(count);
+
+                let ret = executor.proc().list(&query);
                 wrap_result!(ack, name, ret)
             }
             "proc:get" => {
@@ -263,11 +309,23 @@ impl GrpcServer {
             }
             // task
             "task:ls" => {
-                let pid = options
-                    .get::<String>("pid")
-                    .ok_or(Status::invalid_argument("pid is required"))?;
+                let offset = options.get::<i64>("offset").map_or(0, |v| v as usize);
                 let count = options.get::<i64>("count").map_or(100, |v| v as usize);
-                let ret = executor.task().list(&pid, count);
+                let query_by = options
+                    .get::<Vec<(String, String)>>("query_by")
+                    .unwrap_or_default();
+                let order_by = options
+                    .get::<Vec<(String, bool)>>("order_by")
+                    .unwrap_or_default();
+                let query = ExecutorQuery {
+                    offset,
+                    count,
+                    query_by,
+                    order_by,
+                    ..Default::default()
+                };
+
+                let ret = executor.task().list(&query);
                 wrap_result!(ack, name, ret)
             }
             "task:get" => {
@@ -282,11 +340,22 @@ impl GrpcServer {
             }
             // msg
             "msg:ls" => {
-                let pid = options
-                    .get::<String>("pid")
-                    .ok_or(Status::invalid_argument("pid is required"))?;
+                let offset = options.get::<i64>("offset").map_or(0, |v| v as usize);
                 let count = options.get::<i64>("count").map_or(100, |v| v as usize);
-                let ret = executor.msg().list(&pid, count);
+                let order_by = options
+                    .get::<Vec<(String, bool)>>("order_by")
+                    .unwrap_or_default();
+                let query_by = options
+                    .get::<Vec<(String, String)>>("query_by")
+                    .unwrap_or_default();
+                let query = ExecutorQuery {
+                    offset,
+                    count,
+                    query_by,
+                    order_by,
+                    ..Default::default()
+                };
+                let ret = executor.msg().list(&query);
                 wrap_result!(ack, name, ret)
             }
             "msg:get" => {
@@ -304,6 +373,11 @@ impl GrpcServer {
             }
             "msg:redo" => {
                 let ret = executor.msg().redo();
+                wrap_result!(ack, name, ret)
+            }
+            "msg:clear" => {
+                let pid = options.get::<String>("pid");
+                let ret = executor.msg().clear(pid);
                 wrap_result!(ack, name, ret)
             }
             "msg:rm" => {

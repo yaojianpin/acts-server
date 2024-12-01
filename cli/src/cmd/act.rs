@@ -1,6 +1,9 @@
+use crate::util;
+
 use super::CommandRunner as Command;
 use acts_channel::Vars;
 use clap::{Args, Subcommand};
+use serde_json::json;
 
 #[derive(Debug, Args)]
 #[command(args_conflicts_with_subcommands = true)]
@@ -18,6 +21,8 @@ pub enum ActCommands {
         pid: String,
         #[arg(help = "task id")]
         tid: String,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 
     #[command(about = "complete a running act")]
@@ -26,6 +31,8 @@ pub enum ActCommands {
         pid: String,
         #[arg(help = "task id")]
         tid: String,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 
     #[command(about = "skip a running act")]
@@ -34,6 +41,8 @@ pub enum ActCommands {
         pid: String,
         #[arg(help = "task id")]
         tid: String,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 
     #[command(about = "abort a running act")]
@@ -42,6 +51,8 @@ pub enum ActCommands {
         pid: String,
         #[arg(help = "task id")]
         tid: String,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 
     #[command(about = "set a running act as error")]
@@ -52,8 +63,8 @@ pub enum ActCommands {
         tid: String,
         #[arg(help = "error code")]
         ecode: String,
-        #[arg(help = "error message")]
-        error: Option<String>,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 
     #[command(about = "cancel a completed act")]
@@ -62,6 +73,8 @@ pub enum ActCommands {
         pid: String,
         #[arg(help = "task id")]
         tid: String,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 
     #[command(about = "back a running act to a historical step")]
@@ -72,6 +85,8 @@ pub enum ActCommands {
         tid: String,
         #[arg(required = true, help = "model file path")]
         to: String,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 
     #[command(about = "push a new act under a step")]
@@ -80,6 +95,8 @@ pub enum ActCommands {
         pid: String,
         #[arg(help = "task id")]
         tid: String,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 
     #[command(about = "remove an act from a step")]
@@ -88,47 +105,38 @@ pub enum ActCommands {
         pid: String,
         #[arg(help = "task id")]
         tid: String,
+        #[arg(short, long, help="vars in K=V format\nthe V can be number, string, or json, \nif the V contains whitesapce, please wrap it in `'` or `\"`\nexample: \n-v a=1 -v b=abc -v c='[2, 3, 4]' -v d='{ \"value\": 100 }' -v e=null", value_parser = util::parse_key_json::<String>)]
+        vars: Vec<(String, serde_json::Value)>,
     },
 }
 
 pub async fn process(parent: &mut Command<'_>, command: &ActCommands) -> Result<(), String> {
     let ret = match command {
-        ActCommands::Submit { pid, tid } => {
-            send(parent, "act:submit", pid, tid, parent.vars.clone()).await
+        ActCommands::Submit { pid, tid, vars } => send(parent, "act:submit", pid, tid, vars).await,
+        ActCommands::Complete { pid, tid, vars } => {
+            send(parent, "act:complete", pid, tid, vars).await
         }
-        ActCommands::Complete { pid, tid } => {
-            send(parent, "act:complete", pid, tid, parent.vars.clone()).await
-        }
-        ActCommands::Skip { pid, tid } => {
-            send(parent, "act:skip", pid, tid, parent.vars.clone()).await
-        }
-        ActCommands::Abort { pid, tid } => {
-            send(parent, "act:abort", pid, tid, parent.vars.clone()).await
-        }
+        ActCommands::Skip { pid, tid, vars } => send(parent, "act:skip", pid, tid, vars).await,
+        ActCommands::Abort { pid, tid, vars } => send(parent, "act:abort", pid, tid, vars).await,
         ActCommands::Error {
             pid,
             tid,
             ecode,
-            error,
+            vars,
         } => {
-            let mut vars = Vars::new().with("ecode", ecode);
-            if let Some(error) = error {
-                vars.set("error", error);
-            }
-            let ret = send(parent, "act:error", pid, tid, vars.extend(&parent.vars)).await?;
+            let mut vars = vars.clone();
+            vars.push(("ecode".to_string(), json!(ecode)));
+            let ret = send(parent, "act:error", pid, tid, &vars).await?;
             Ok(ret)
         }
-        ActCommands::Cancel { pid, tid } => {
-            send(parent, "act:cancel", pid, tid, parent.vars.clone()).await
+        ActCommands::Cancel { pid, tid, vars } => send(parent, "act:cancel", pid, tid, vars).await,
+        ActCommands::Back { pid, tid, to, vars } => {
+            let mut vars = vars.clone();
+            vars.push(("to".to_string(), json!(to)));
+            send(parent, "act:back", pid, tid, &vars).await
         }
-        ActCommands::Back { pid, tid, to } => {
-            let vars = Vars::new().with("to", to);
-            send(parent, "act:back", pid, tid, vars.extend(&parent.vars)).await
-        }
-        ActCommands::Push { pid, tid } => send(parent, "push", pid, tid, parent.vars.clone()).await,
-        ActCommands::Remove { pid, tid } => {
-            send(parent, "act:remove", pid, tid, parent.vars.clone()).await
-        }
+        ActCommands::Push { pid, tid, vars } => send(parent, "push", pid, tid, vars).await,
+        ActCommands::Remove { pid, tid, vars } => send(parent, "act:remove", pid, tid, vars).await,
     }?;
 
     parent.output(&ret);
@@ -140,10 +148,15 @@ async fn send(
     name: &str,
     pid: &str,
     tid: &str,
-    vars: Vars,
+    vars: &Vec<(String, serde_json::Value)>,
 ) -> Result<String, String> {
     let mut ret = String::new();
-    let options = Vars::new().with("pid", pid).with("tid", tid).extend(&vars);
+
+    #[allow(unused_mut, unused_variables)]
+    let mut options = Vars::new().with("pid", pid).with("tid", tid);
+    for (k, v) in vars {
+        options.set(k, v);
+    }
     let resp = parent
         .client
         .send::<()>(name, options)

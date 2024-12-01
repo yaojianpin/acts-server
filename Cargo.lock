@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "acts"
-version = "0.12.5"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95516e0b20f81fa003adf4e82dab97c015da4fb42a688195497dd7178a524fd6"
+checksum = "b50f7aecb7eb1726191f98656cc48e7fff6fb5b93a6a753be8d75682220bae17"
 dependencies = [
  "async-trait",
  "chrono",
@@ -35,9 +35,9 @@ dependencies = [
 
 [[package]]
 name = "acts-channel"
-version = "0.6.3"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fffde7363ada7717514bbff91dc21de41c4b4f77d897baf6cf77d31bef475f9"
+checksum = "91c10bc4e92a8d03a32cb59754922c25d6bdfcd1b8f8992699c85eedabc78355"
 dependencies = [
  "chrono",
  "futures",
@@ -57,7 +57,7 @@ dependencies = [
 
 [[package]]
 name = "acts-cli"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "acts-channel",
  "chrono",
@@ -67,6 +67,7 @@ dependencies = [
  "once_cell",
  "owo-colors",
  "prettytable-rs",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -77,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "acts-server"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "acts",
  "acts-channel",

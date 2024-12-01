@@ -28,7 +28,6 @@ after started `acts-cli`, run <COMMAND> to interacte with `acts-server`
 Usage: <COMMAND>
 
 Commands:
-  vars     set options for command arguments
   model    execute model commands
   package  execute package commands
   proc     execute proc commands
