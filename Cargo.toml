@@ -3,13 +3,13 @@ authors = ["Yao <yaojianpin@sohu.com>"]
 description = "a simple, fast, tiny workflow server"
 edition = "2021"
 name = "acts-server"
-version = "0.7.0"
+version = "0.7.1"
 keywords = ["workflow", "acts", "server"]
 license = "Apache-2.0"
 repository = "https://github.com/yaojianpin/acts-server.git"
 
 [dependencies]
-acts = { version = "0.13.1", features = ["store"] }
+acts = { version = "0.13.2", features = ["store"] }
 acts-channel = { version = "0.7.0" }
 globset = "0.4.10"
 hocon = "0.9.0"
