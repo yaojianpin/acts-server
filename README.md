@@ -7,7 +7,7 @@ Create a acts workflow server based on [`acts`](https://github.com/yaojianpin/ac
 
 # acts-server
 
-Download server file from [`Releases`](https://github.com/yaojianpin/acts-server/releases) and start it
+Download server files from [`Releases`](https://github.com/yaojianpin/acts-server/releases) and start it
 
 # acts-cli
 
@@ -26,7 +26,7 @@ Options:
   -h, --help         Print help
 ```
 
-after started `acts-cli`, run <COMMAND> to interacte with `acts-server`
+When you started `acts-cli`, execute the `<COMMAND>` to interacte with `acts-server`
 
 ```console
 Usage: <COMMAND>
