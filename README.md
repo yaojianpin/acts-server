@@ -5,6 +5,10 @@
 
 Create a acts workflow server based on [`acts`](https://github.com/yaojianpin/acts) lib
 
+# acts-server
+
+Download server file from [`Releases`](https://github.com/yaojianpin/acts-server/releases) and start it
+
 # acts-cli
 
 a command client for acts-server
@@ -37,3 +41,9 @@ Commands:
   exit     exit the cli
   help     Print this message or the help of the given subcommand(s)
 ```
+
+# client channels
+
+- rust https://github.com/yaojianpin/acts-channel
+- python https://github.com/yaojianpin/acts-channel-py
+- go https://github.com/yaojianpin/acts-channel-go
